@@ -1,0 +1,38 @@
+{
+  "name": "pi-notify",
+  "version": "0.1.0",
+  "description": "Send phone/desktop notifications from Pi through Bark or ntfy: task done/failed, questions, goal events, reminders and schedules",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "notification",
+    "bark",
+    "ntfy"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "scripts": {
+    "test": "node --test tests/selftest.ts"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "files": [
+    "index.ts",
+    "src/",
+    "skills/",
+    "README.md",
+    "README.zh-CN.md",
+    "config.example.json"
+  ],
+  "devDependencies": {
+    "@types/node": "^26.6.5"
+  }
+}
