@@ -1,0 +1,53 @@
+{
+  "provider": "bark",
+  "enabled": true,
+  "titlePrefix": "Pi",
+  "includeSession": true,
+  "timeoutMs": 8000,
+  "retries": 2,
+  "bark": {
+    "key": "your-bark-device-key",
+    "baseUrl": "https://api.day.app",
+    "group": "pi",
+    "sound": "glass",
+    "icon": "https://day.app/assets/images/avatar.jpg",
+    "level": { "info": "active", "warning": "timeSensitive", "critical": "critical" },
+    "callOnCritical": true,
+    "ttlSeconds": 600,
+    "encryption": {
+      "enabled": false,
+      "algorithm": "aes-128-cbc",
+      "key": "1234567890123456",
+      "iv": "1234567890123456"
+    }
+  },
+  "ntfy": {
+    "server": "https://ntfy.sh",
+    "topic": "pick-a-hard-to-guess-topic",
+    "token": "",
+    "markdown": false,
+    "priority": { "info": 3, "warning": 4, "critical": 5 },
+    "tags": ["pi"],
+    "encryption": { "enabled": false, "key": "a-passphrase" }
+  },
+  "auto": {
+    "enabled": true,
+    "scopes": {
+      "task_complete": true,
+      "task_failed": true,
+      "question": true,
+      "goal": true,
+      "tool_error": false,
+      "ui_prompt": true,
+      "reminder": true,
+      "manual": true
+    },
+    "minRunSeconds": 20,
+    "throttleSeconds": 15,
+    "maxBodyChars": 900,
+    "notifyAborted": false
+  },
+  "schedules": [
+    { "id": "standup", "body": "Standup", "at": "09:30", "every": "1d", "level": "info" }
+  ]
+}

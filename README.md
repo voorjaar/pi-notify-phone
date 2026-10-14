@@ -1,0 +1,189 @@
+# pi-notify
+
+**English** | [简体中文](README.zh-CN.md)
+
+Send notifications from the Pi coding agent to your phone - task finished, task failed,
+a question waiting for you, goal events, and reminders you ask the agent to set.
+Two transports are supported: [Bark](https://bark.day.app/#/en-us/?id=bark) and
+[ntfy](https://docs.ntfy.sh/config/).
+
+```text
+Pi finishes a long task  ->  pi-notify  ->  https://api.day.app/...  ->  your phone buzzes
+```
+
+## Features
+
+- **Two providers**: Bark (iOS) and ntfy (iOS, Android, desktop, web). Choose one in config or
+  with `/notify provider bark|ntfy`.
+- **Optional encryption**: Bark AES-128-CBC or AES-256-GCM request bodies (the official
+  `crypto.ts` scheme), and self-hosted ntfy AES-256-GCM envelopes that the agent can decrypt
+  back to plain text.
+- **Automatic or manual**: one master switch, one automatic switch, and a switch per scenario.
+  The agent can always send on request as long as the `manual` scope is on.
+- **Scenarios**: task complete / failed / aborted, `ask_user_question` waiting for an answer,
+  goal started / complete / blocked / paused, blocking UI prompts, tool errors, reminders.
+- **Reminders and scheduled notifications**: relative (`in 20m`), absolute (`at 08:30`,
+  `tomorrow 09:00`), and recurring (`every 1d`), persisted so a restart still delivers them.
+- **Noise control**: minimum run duration, per-scope throttling, duplicate suppression,
+  body length caps, TTL so stale notifications are dropped.
+
+## Install
+
+```bash
+pi install git:github.com/voorjaar/pi-notify
+```text
+
+Or point Pi at a local checkout:
+
+```bash
+pi -e /path/to/pi-notify/index.ts
+```
+
+## Setup
+
+Create `~/.pi/agent/pi-notify.json` with at least the provider you want to use:
+
+```json
+{
+  "provider": "bark",
+  "bark": { "key": "your-bark-device-key" }
+}
+```text
+
+Copy [`config.example.json`](config.example.json) for the full set of options. Then check it:
+
+```
+/notify status
+/notify test
+```text
+
+You can also verify delivery without a Pi session:
+
+```bash
+node scripts/send.ts "pi-notify" "hello" info
+```
+
+## Configuration
+
+Config is merged layer by layer, later layers win:
+
+1. built-in defaults
+2. `~/.pi/agent/settings.json` → `pi-notify` key
+3. `~/.pi/agent/pi-notify.json`
+4. `<project>/.pi/pi-notify.json`
+5. `<project>/.pi/pi-notify.local.json` (gitignored personal overrides)
+
+Invalid values are ignored and reported by `/notify status` instead of breaking the session.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `provider` | `bark` | `bark` or `ntfy` |
+| `enabled` | `true` | Master switch. Off sends nothing, including manual sends. |
+| `titlePrefix` | `Pi` | Prefix for notification titles; `null` disables it. |
+| `includeSession` | `true` | Append the project name to titles. |
+| `timeoutMs` | `8000` | Per-attempt HTTP timeout. |
+| `retries` | `2` | Retries for 5xx and network errors (not for 4xx). |
+| `bark.key` / `bark.keys` | - | Device key(s) from the Bark app. Multiple keys send to multiple devices. |
+| `bark.baseUrl` | `https://api.day.app` | Self-hosted Bark server. |
+| `bark.group` | `pi` | Bark group. |
+| `bark.sound` | `glass` | Bark sound. |
+| `bark.level` | `active` / `timeSensitive` / `critical` | Maps our levels to Bark interruption levels. |
+| `bark.callOnCritical` | `true` | `call=1` on critical so it can break Do Not Disturb. |
+| `bark.ttlSeconds` | `600` | `ttl`: drop the notification if the device is offline this long. |
+| `bark.encryption.enabled` | `false` | Encrypt the request body. |
+| `bark.encryption.algorithm` | `aes-128-cbc` | `aes-128-cbc` or `aes-256-gcm`. |
+| `bark.encryption.key` | - | 16 chars for AES-128, 32 for AES-256. |
+| `bark.encryption.iv` | - | Required for AES-128-CBC (16 chars). AES-256-GCM uses a random IV. |
+| `ntfy.server` | `https://ntfy.sh` | Server URL; public topics do not need a token. |
+| `ntfy.topic` | - | Publish topic. For public ntfy.sh pick something hard to guess. |
+| `ntfy.token` | - | `k...` access token for private topics. |
+| `ntfy.user` / `ntfy.password` | - | HTTP basic auth, for self-hosted servers. |
+| `ntfy.priority` | `3` / `4` / `5` | Maps our levels to ntfy priorities (1-5, 5 = max priority). |
+| `ntfy.encryption.enabled` | `false` | Send AES-256-GCM envelopes (self-hosted ntfy with `cache-enc-key`). |
+| `ntfy.encryption.key` | - | Any passphrase; derived with PBKDF2-SHA256, or 32 raw key bytes as hex. |
+| `auto.enabled` | `true` | Automatic scenario notifications. |
+| `auto.scopes` | see below | Per-scenario switches. |
+| `auto.minRunSeconds` | `20` | Only notify for runs at least this long. |
+| `auto.throttleSeconds` | `15` | Minimum gap between notifications per scope. |
+| `auto.maxBodyChars` | `900` | Bodies longer than this are truncated. |
+| `auto.notifyAborted` | `false` | Notify when a run is aborted. |
+| `scheduleFile` | `~/.pi/agent/pi-notify-schedule.json` | Where reminders are stored. |
+| `schedules` | `[]` | Predefined scheduled notifications, e.g. a daily standup ping. |
+
+Scenario scopes (`auto.scopes`), all default `true` except `tool_error`:
+
+| Scope | Fires on |
+| --- | --- |
+| `task_complete` | A run finished and lasted at least `minRunSeconds` |
+| `task_failed` | A run ended with an API/model error |
+| `question` | `ask_user_question` is waiting for your answer |
+| `goal` | Goal started / complete / blocked / paused |
+| `tool_error` | A tool call returned an error |
+| `ui_prompt` | An extension opened a blocking input dialog |
+| `reminder` | A scheduled reminder is due |
+| `manual` | A send you or the agent asked for explicitly |
+
+## Use it from the agent
+
+Ask in plain language:
+
+- "remind me to stretch in 20 minutes"
+- "notify me when the build finishes"
+- "ping me every day at 09:30 that the backup ran"
+
+The agent uses the `notify` tool (`in`, `at`, `every`, `level`, `url`, `group`, `sound`) and
+`notify_reminders` to list, cancel, or clear scheduled notifications.
+
+## Commands
+
+```text
+/notify                        status summary
+/notify on | off               master switch (this session)
+/notify auto on | off          automatic scenario notifications
+/notify scope <name> on|off    one scenario
+/notify provider bark|ntfy     transport (this session)
+/notify test                   send one notification to check delivery
+/notify send <text>            send now
+/notify schedule <when> <text> e.g. /notify schedule 20m stretch
+/notify list                   scheduled notifications
+/notify cancel <id>            cancel one
+/notify clear                  cancel all
+/notify decrypt <text>         decrypt a pi-notify ntfy envelope
+```
+
+Overrides from `/notify` apply to the current session; edit the config file to make them permanent.
+
+## Encryption
+
+**Bark.** The extension sends the same envelope the official Bark app produces:
+`?c=1&zone=...` plus a base64 body, where the payload is `key:body` (or
+`title:body:sound:link:group:icon:call:level`) encrypted with AES-128-CBC or AES-256-GCM.
+The ciphertext is padded to a multiple of 16 bytes, as Bark requires. Set the same key (and IV
+for AES-128-CBC) in the Bark app under *Encryption*.
+
+**ntfy.** Public ntfy.sh topics are plain HTTPS - anything published there is readable by
+whoever knows the topic. For real confidentiality use a self-hosted ntfy with
+`cache-enc-key` and set `ntfy.encryption.enabled = true`: the extension publishes a
+`pi-notify:v1:<iv>:<tag>:<ciphertext>` envelope (AES-256-GCM, key derived from your passphrase
+with PBKDF2-SHA256) that only a client holding the passphrase can read. `/notify decrypt` and
+the agent can turn such an envelope back into readable text.
+
+## Development
+
+```bash
+node --test tests/selftest.ts
+```text
+
+The self-test covers time parsing, config layering, both transports, both encryption paths,
+reminder scheduling, and the notification switches. It uses a fake transport, so it never sends
+real notifications.
+
+## Limitations
+
+- Notifications only fire while a Pi session is running; there is no daemon. A reminder due while
+  Pi is closed is delivered the next time a session starts (or expires, if it is older than
+  `staleAfterMs`).
+- ntfy server-side scheduling (`Send At`) is used for one-shot reminders when encryption is off;
+  recurring reminders are scheduled by the extension itself.
+- The extension does not read your phone, so it cannot tell you whether a notification was
+  actually delivered.

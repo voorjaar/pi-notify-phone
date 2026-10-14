@@ -17,7 +17,8 @@
     ]
   },
   "scripts": {
-    "test": "node --test tests/selftest.ts"
+    "test": "node --test tests/selftest.ts",
+    "send": "node scripts/send.ts"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
