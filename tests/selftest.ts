@@ -6,7 +6,7 @@ import { test } from "node:test";
 
 import { defaultConfig, findProblems, loadConfig, mergeConfig, normalizeConfig, resolveAgentDir } from "../src/config.ts";
 import { ReminderScheduler, fileStore, makeId, memoryStore } from "../src/scheduler.ts";
-import { NotifyBus, composeRequest } from "../src/bus.ts";
+import { NotifyBus, composeRequest, readNotifyLog } from "../src/bus.ts";
 import { decryptBarkPayload, decryptNtfyBody, isNtfyEnvelope } from "../src/crypto.ts";
 import { buildBarkRequests, buildNtfyRequest, sendNotification } from "../src/providers.ts";
 import { formatDuration, formatRelative, parseDuration, parseWhen } from "../src/time.ts";
@@ -593,6 +593,57 @@ test("scheduler entries survive a malformed store file", () => {
 		writeFileSync(path, JSON.stringify([{ id: "a", body: "b", dueAt: "nope" }, { id: "c", body: "d", dueAt: 123 }]));
 		const mixed = fileStore(path).load();
 		assert.deepEqual(mixed.map((entry: ScheduleEntry) => entry.id), ["c"]);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("send history records delivered and skipped notifications", async () => {
+	const dir = scratchDir();
+	try {
+		const config = baseConfig({ logFile: join(dir, "log.jsonl"), logEnabled: true });
+		const bus = new NotifyBus(config, {
+			transport: async (): Promise<SendResult> => ({ ok: true, provider: "bark", detail: "sent", attempts: 1, encrypted: false }),
+			now: () => 1000,
+		});
+		const first = await bus.send({ scope: "manual", body: "hello", title: "t", level: "info" });
+		const second = await bus.send({ scope: "manual", body: "hello", title: "t", level: "info" });
+		assert.equal(first.ok, true);
+		assert.equal(second.ok, false);
+		const entries = readNotifyLog(join(dir, "log.jsonl"));
+		assert.equal(entries.length, 2);
+		assert.equal(entries[0].ok, true);
+		assert.equal(entries[0].scope, "manual");
+		assert.match(entries[1].detail ?? "", /duplicate/);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("project local config layer overrides the project layer", () => {
+	const dir = scratchDir();
+	try {
+		mkdirSync(join(dir, ".pi"), { recursive: true });
+		writeFileSync(join(dir, ".pi", "pi-notify.json"), JSON.stringify({ provider: "ntfy", ntfy: { topic: "project" } }));
+		writeFileSync(join(dir, ".pi", "pi-notify.local.json"), JSON.stringify({ ntfy: { topic: "personal" } }));
+		const loaded = loadConfig({ cwd: dir, agentDir: join(dir, "agent"), env: {} });
+		assert.equal(loaded.config.provider, "ntfy");
+		assert.equal(loaded.config.ntfy.topic, "personal");
+		assert.equal(loaded.layers.some((layer) => layer.path.endsWith("pi-notify.local.json") && layer.loaded), true);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("maxLateMs and send history settings come from the config file", () => {
+	const dir = scratchDir();
+	try {
+		mkdirSync(join(dir, "agent"), { recursive: true });
+		writeFileSync(join(dir, "agent", "pi-notify.json"), JSON.stringify({ maxLateMs: 1500, logEnabled: false, retries: 0 }));
+		const loaded = loadConfig({ cwd: dir, agentDir: join(dir, "agent"), env: {} });
+		assert.equal(loaded.config.maxLateMs, 1500);
+		assert.equal(loaded.config.logEnabled, false);
+		assert.equal(loaded.config.retries, 0);
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}

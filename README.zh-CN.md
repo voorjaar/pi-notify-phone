@@ -59,10 +59,10 @@ node scripts/send.ts "pi-notify" "hello" info
 配置逐层合并，后面的层覆盖前面的层：
 
 1. 内置默认值
-2. `~/.pi/agent/settings.json` 里的 `pi-notify` 键
-3. `~/.pi/agent/pi-notify.json`
-4. `<项目>/.pi/pi-notify.json`
-5. `<项目>/.pi/pi-notify.local.json`（个人覆盖，已 gitignore）
+2. `~/.pi/agent/pi-notify.json`
+3. `<项目>/.pi/pi-notify.json`
+4. `<项目>/.pi/pi-notify.local.json`（个人覆盖；`.pi/` 已被 gitignore）
+5. `PI_NOTIFY_*` 环境变量
 
 非法值会被忽略并在 `/notify status` 里报告，不会让会话启动失败。
 
@@ -99,6 +99,9 @@ node scripts/send.ts "pi-notify" "hello" info
 | `auto.maxBodyChars` | `900` | 正文超过这个长度会被截断。 |
 | `auto.notifyAborted` | `false` | 运行被中止时是否通知。 |
 | `scheduleFile` | `~/.pi/agent/pi-notify-schedule.json` | 提醒的存储位置。 |
+| `maxLateMs` | `21600000` | 到点后超过这个时长才触发的提醒会被丢弃而不是补发。 |
+| `logFile` | `~/.pi/agent/pi-notify-log.jsonl` | 每次发送（包括被跳过）写一行 JSON。用 `/notify log` 查看。 |
+| `logEnabled` | `true` | 关掉发送历史。 |
 | `schedules` | `[]` | 预置的定时通知，例如每天一次的站会提醒。 |
 
 场景开关（`auto.scopes`），除 `tool_error` 外默认都是 `true`：
@@ -113,6 +116,15 @@ node scripts/send.ts "pi-notify" "hello" info
 | `ui_prompt` | 某个扩展打开了阻塞式输入框 |
 | `reminder` | 定时提醒到点 |
 | `manual` | 你或助手明确要求的一次发送 |
+
+环境变量覆盖（优先级高于配置文件）：`PI_NOTIFY_PROVIDER`、`PI_NOTIFY_ENABLED`、
+`PI_NOTIFY_TITLE`、`PI_NOTIFY_AUTO_ENABLED`、`PI_NOTIFY_AUTO_SCOPES=question:on,goal:off`、
+`PI_NOTIFY_MIN_RUN_SECONDS`、`PI_NOTIFY_THROTTLE_SECONDS`、`PI_NOTIFY_BARK_KEY`
+（逗号分隔可写多台设备）、`PI_NOTIFY_BARK_BASE_URL`、`PI_NOTIFY_BARK_GROUP`、
+`PI_NOTIFY_BARK_SOUND`、`PI_NOTIFY_BARK_ICON`、`PI_NOTIFY_BARK_ENCRYPT`、
+`PI_NOTIFY_BARK_ENCRYPT_KEY`、`PI_NOTIFY_BARK_ENCRYPT_IV`、`PI_NOTIFY_BARK_ENCRYPT_ALGORITHM`、
+`PI_NOTIFY_NTFY_SERVER`、`PI_NOTIFY_NTFY_TOPIC`、`PI_NOTIFY_NTFY_TOKEN`、`PI_NOTIFY_NTFY_USER`、
+`PI_NOTIFY_NTFY_PASSWORD`、`PI_NOTIFY_NTFY_ENCRYPT`、`PI_NOTIFY_NTFY_ENCRYPT_KEY`。
 
 ## 让助手使用
 
@@ -139,6 +151,7 @@ node scripts/send.ts "pi-notify" "hello" info
 /notify list                   列出已排定的通知
 /notify cancel <id>            取消一条
 /notify clear                  全部取消
+/notify log [n]                最近 n 次发送记录（已发、被跳过、失败）
 /notify decrypt <text>         解密一条 pi-notify 的 ntfy 信封
 ```
 
@@ -168,6 +181,6 @@ node --test tests/selftest.ts
 ## 已知限制
 
 - 通知只在 Pi 会话运行时触发，没有常驻守护进程。Pi 关闭期间到点的提醒会在下次会话启动时补发
-  （太旧则按 `staleAfterMs` 过期丢弃）。
+  （超过 `maxLateMs` 太旧则直接丢弃）。
 - 关闭加密时，单次提醒会使用 ntfy 的服务端定时（`Send At`）；周期性提醒由扩展自己调度。
 - 扩展读不到你的手机，所以无法确认通知是否真的送达。

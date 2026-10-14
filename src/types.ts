@@ -131,6 +131,18 @@ export interface AutoConfig {
 	notifyAborted: boolean;
 }
 
+export interface NotifyLogEntry {
+	ts: number;
+	scope: NotifyScope;
+	provider: ProviderName;
+	title: string;
+	body: string;
+	ok: boolean;
+	detail?: string;
+	attempts: number;
+	encrypted: boolean;
+}
+
 export interface ScheduleEntry {
 	/** Stable id used by list/cancel. */
 	id: string;
@@ -163,6 +175,11 @@ export interface NotifyConfig {
 	bark: BarkConfig;
 	ntfy: NtfyConfig;
 	auto: AutoConfig;
+	/** Pending schedules whose due time is older than this are dropped instead of delivered late. */
+	maxLateMs: number;
+	/** JSON-lines record of every send attempt; read back with /notify log. */
+	logFile: string;
+	logEnabled: boolean;
 	/** Schedules declared in config; armed on session_start. */
 	schedules: ScheduleEntry[];
 	/** Where pending schedules are persisted. */

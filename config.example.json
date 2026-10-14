@@ -30,6 +30,8 @@
     "tags": ["pi"],
     "encryption": { "enabled": false, "key": "a-passphrase" }
   },
+  "maxLateMs": 21600000,
+  "logEnabled": true,
   "auto": {
     "enabled": true,
     "scopes": {

@@ -12,7 +12,7 @@ import { basename } from "node:path";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { NotifyBus } from "./src/bus.ts";
+import { NotifyBus, readNotifyLog } from "./src/bus.ts";
 import { loadConfig, resolveAgentDir } from "./src/config.ts";
 import { decryptNtfyBody, isNtfyEnvelope } from "./src/crypto.ts";
 import { sendNotification } from "./src/providers.ts";
@@ -94,6 +94,7 @@ export default function (pi: ExtensionAPI) {
 					meta,
 				});
 			},
+			maxLateMs: config.maxLateMs,
 			onEvent: (message, level) => ctx.ui.notify(message, level),
 		});
 		for (const entry of config.schedules) {
@@ -338,6 +339,7 @@ export default function (pi: ExtensionAPI) {
 				"provider bark",
 				"provider ntfy",
 				"scope <name> on|off",
+				"log [n]",
 				"decrypt <text>",
 			];
 			const values = options.filter((option) => option.startsWith(prefix));
@@ -450,6 +452,20 @@ export default function (pi: ExtensionAPI) {
 				ctx.ui.notify(`cleared ${removed} scheduled notification(s)`, "info");
 				return;
 			}
+			if (sub === "log") {
+				const raw = Number(parts[1] ?? 15);
+				const count = Number.isFinite(raw) ? Math.min(50, Math.max(1, Math.floor(raw))) : 15;
+				const entries = readNotifyLog(config.logFile, count);
+				if (entries.length === 0) {
+					ctx.ui.notify(`no send history in ${config.logFile}`, "info");
+					return;
+				}
+				ctx.ui.notify(
+					entries.map((entry) => `${new Date(entry.ts).toLocaleString()}  ${entry.ok ? "sent" : entry.detail ?? "failed"}  ${entry.scope}/${entry.provider}  ${entry.title} ${entry.body}`.trim()).join("\n"),
+					"info",
+				);
+				return;
+			}
 			if (sub === "decrypt") {
 				const text = parts.slice(1).join(" ");
 				if (!isNtfyEnvelope(text)) {
@@ -506,7 +522,7 @@ export default function (pi: ExtensionAPI) {
 			`encryption: ${config.provider === "bark" ? `${barkEnc.enabled ? `on (${barkEnc.algorithm})` : "off"}` : `${ntfyEnc.enabled ? "on (AES-256-GCM envelope)" : "off"}${config.ntfy.token || config.ntfy.user ? " · authenticated" : ""}`}`,
 		);
 		lines.push(`noise: minRun ${config.auto.minRunSeconds}s · throttle ${config.auto.throttleSeconds}s · body ${config.auto.maxBodyChars} chars`);
-		lines.push(`reminders: ${reminders().length} pending · store ${config.scheduleFile}`);
+		lines.push(`reminders: ${reminders().length} pending · store ${config.scheduleFile} · history ${config.logEnabled ? config.logFile : "off"}`);
 		if (problems.fatal.length > 0) lines.push(`needs setup: ${problems.fatal.join(" · ")}`);
 		if (problems.warnings.length > 0) lines.push(`warnings: ${problems.warnings.join(" · ")}`);
 		return lines.join("\n");

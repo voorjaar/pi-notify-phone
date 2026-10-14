@@ -68,10 +68,10 @@ node scripts/send.ts "pi-notify" "hello" info
 Config is merged layer by layer, later layers win:
 
 1. built-in defaults
-2. `~/.pi/agent/settings.json` → `pi-notify` key
-3. `~/.pi/agent/pi-notify.json`
-4. `<project>/.pi/pi-notify.json`
-5. `<project>/.pi/pi-notify.local.json` (gitignored personal overrides)
+2. `~/.pi/agent/pi-notify.json`
+3. `<project>/.pi/pi-notify.json`
+4. `<project>/.pi/pi-notify.local.json` (personal overrides; `.pi/` is gitignored)
+5. `PI_NOTIFY_*` environment variables
 
 Invalid values are ignored and reported by `/notify status` instead of breaking the session.
 
@@ -108,6 +108,9 @@ Invalid values are ignored and reported by `/notify status` instead of breaking 
 | `auto.maxBodyChars` | `900` | Bodies longer than this are truncated. |
 | `auto.notifyAborted` | `false` | Notify when a run is aborted. |
 | `scheduleFile` | `~/.pi/agent/pi-notify-schedule.json` | Where reminders are stored. |
+| `maxLateMs` | `21600000` | A reminder whose due time is more than this late is dropped instead of delivered. |
+| `logFile` | `~/.pi/agent/pi-notify-log.jsonl` | One JSON line per send attempt, including skips. Read it with `/notify log`. |
+| `logEnabled` | `true` | Turn the send history off. |
 | `schedules` | `[]` | Predefined scheduled notifications, e.g. a daily standup ping. |
 
 Scenario scopes (`auto.scopes`), all default `true` except `tool_error`:
@@ -122,6 +125,15 @@ Scenario scopes (`auto.scopes`), all default `true` except `tool_error`:
 | `ui_prompt` | An extension opened a blocking input dialog |
 | `reminder` | A scheduled reminder is due |
 | `manual` | A send you or the agent asked for explicitly |
+
+Environment overrides (they win over the files): `PI_NOTIFY_PROVIDER`, `PI_NOTIFY_ENABLED`,
+`PI_NOTIFY_TITLE`, `PI_NOTIFY_AUTO_ENABLED`, `PI_NOTIFY_AUTO_SCOPES=question:on,goal:off`,
+`PI_NOTIFY_MIN_RUN_SECONDS`, `PI_NOTIFY_THROTTLE_SECONDS`, `PI_NOTIFY_BARK_KEY`
+(comma-separated for several devices), `PI_NOTIFY_BARK_BASE_URL`, `PI_NOTIFY_BARK_GROUP`,
+`PI_NOTIFY_BARK_SOUND`, `PI_NOTIFY_BARK_ICON`, `PI_NOTIFY_BARK_ENCRYPT`,
+`PI_NOTIFY_BARK_ENCRYPT_KEY`, `PI_NOTIFY_BARK_ENCRYPT_IV`, `PI_NOTIFY_BARK_ENCRYPT_ALGORITHM`,
+`PI_NOTIFY_NTFY_SERVER`, `PI_NOTIFY_NTFY_TOPIC`, `PI_NOTIFY_NTFY_TOKEN`, `PI_NOTIFY_NTFY_USER`,
+`PI_NOTIFY_NTFY_PASSWORD`, `PI_NOTIFY_NTFY_ENCRYPT`, `PI_NOTIFY_NTFY_ENCRYPT_KEY`.
 
 ## Use it from the agent
 
@@ -148,6 +160,7 @@ The agent uses the `notify` tool (`in`, `at`, `every`, `level`, `url`, `group`, 
 /notify list                   scheduled notifications
 /notify cancel <id>            cancel one
 /notify clear                  cancel all
+/notify log [n]                last n send attempts (sent, skipped, failed)
 /notify decrypt <text>         decrypt a pi-notify ntfy envelope
 ```
 
@@ -181,8 +194,8 @@ real notifications.
 ## Limitations
 
 - Notifications only fire while a Pi session is running; there is no daemon. A reminder due while
-  Pi is closed is delivered the next time a session starts (or expires, if it is older than
-  `staleAfterMs`).
+  Pi is closed is delivered the next time a session starts (or dropped, if it is more than
+  `maxLateMs` late).
 - ntfy server-side scheduling (`Send At`) is used for one-shot reminders when encryption is off;
   recurring reminders are scheduled by the extension itself.
 - The extension does not read your phone, so it cannot tell you whether a notification was

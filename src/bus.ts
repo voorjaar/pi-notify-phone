@@ -4,7 +4,9 @@
  * Pure logic with an injected transport so the rules are testable without a network.
  */
 
-import type { NotifyConfig, NotifyLevel, NotifyRequest, NotifyScope, SendResult } from "./types.ts";
+import { readFileSync, writeFileSync } from "node:fs";
+
+import type { NotifyConfig, NotifyLevel, NotifyLogEntry, NotifyRequest, NotifyScope, SendResult } from "./types.ts";
 
 export interface BusOptions {
 	transport: (req: NotifyRequest) => Promise<SendResult>;
@@ -16,6 +18,30 @@ export interface BusOptions {
 
 /** Scenarios the user never triggers by hand. */
 const AUTOMATIC_SCOPES: NotifyScope[] = ["task_complete", "task_failed", "question", "goal", "tool_error", "ui_prompt", "reminder"];
+
+const LOG_CAP = 200;
+
+function tailLines(file: string, count: number): string[] {
+	try {
+		const lines = readFileSync(file, "utf8").split("\n").filter((line) => line.trim().length > 0);
+		return lines.slice(Math.max(0, lines.length - count));
+	} catch {
+		return [];
+	}
+}
+
+/** Most recent send attempts, oldest first. */
+export function readNotifyLog(file: string, count = 15): NotifyLogEntry[] {
+	return tailLines(file, count)
+		.map((line) => {
+			try {
+				return JSON.parse(line) as NotifyLogEntry;
+			} catch {
+				return undefined;
+			}
+		})
+		.filter((entry): entry is NotifyLogEntry => entry !== undefined);
+}
 
 export interface ComposedRequest extends NotifyRequest {
 	scope: NotifyScope;
@@ -101,29 +127,52 @@ export class NotifyBus {
 		const request = composeRequest(input, config, this.sessionName?.());
 		const decision = this.gate(input.scope);
 		if (!decision.allow) {
-			return {
+			return this.logSend(undefined, input.scope, {
 				ok: false,
 				provider: config.provider,
 				detail: `skipped: ${decision.reason}`,
 				attempts: 0,
 				encrypted: false,
-			};
+			});
 		}
 		const previous = this.lastBody.get(input.scope);
 		if (previous === request.body) {
-			return {
+			return this.logSend(request, input.scope, {
 				ok: false,
 				provider: config.provider,
 				detail: "skipped: duplicate of the previous notification",
 				attempts: 0,
 				encrypted: false,
-			};
+			});
 		}
 
 		const result = await this.transport(request);
 		this.lastSentAt.set(input.scope, this.now());
 		this.lastBody.set(input.scope, request.body);
 		if (!result.ok) this.onEvent?.(`notify failed: ${result.detail ?? "unknown error"}`, "warning");
+		return this.logSend(request, input.scope, result);
+	}
+
+	/** Keep a short history so "why did I not get it" is answerable. */
+	private logSend(request: NotifyRequest | undefined, scope: NotifyScope, result: SendResult): SendResult {
+		if (!this.config.logEnabled) return result;
+		const entry: NotifyLogEntry = {
+			ts: this.now(),
+			scope,
+			provider: result.provider,
+			title: request?.title ?? "",
+			body: (request?.body ?? "").slice(0, 200),
+			ok: result.ok,
+			detail: result.detail,
+			attempts: result.attempts,
+			encrypted: result.encrypted,
+		};
+		try {
+			const kept = tailLines(this.config.logFile, LOG_CAP - 1);
+			writeFileSync(this.config.logFile, `${kept.concat(JSON.stringify(entry)).join("\n")}\n`);
+		} catch {
+			// A log that cannot be written must not break the notification.
+		}
 		return result;
 	}
 

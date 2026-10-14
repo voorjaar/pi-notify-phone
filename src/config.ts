@@ -98,6 +98,9 @@ export function defaultConfig(agentDir: string): NotifyConfig {
 			maxBodyChars: 900,
 			notifyAborted: false,
 		},
+		maxLateMs: 6 * 60 * 60 * 1000,
+		logFile: join(agentDir, "pi-notify-log.jsonl"),
+		logEnabled: true,
 		schedules: [],
 		scheduleFile: join(agentDir, SCHEDULE_FILE),
 	};
@@ -357,11 +360,12 @@ export function loadConfig(options: LoadConfigOptions): LoadedConfig {
 
 	const personalPath = join(agentDir, PERSONAL_CONFIG_FILE);
 	const projectPath = join(options.cwd, ".pi", PROJECT_CONFIG_FILE);
+	const projectLocalPath = join(options.cwd, ".pi", `${PROJECT_CONFIG_FILE.replace(/\.json$/, "")}.local.json`);
 
 	let config = defaultConfig(agentDir);
 	const patches: Array<Record<string, unknown>> = [];
 
-	for (const path of [personalPath, projectPath]) {
+	for (const path of [personalPath, projectPath, projectLocalPath]) {
 		const { data, error } = readJsonFile(path);
 		layers.push({ path, loaded: data !== undefined, error });
 		if (data) patches.push(data);
