@@ -71,6 +71,7 @@ export function defaultConfig(agentDir: string): NotifyConfig {
 			level: { info: "active", warning: "timeSensitive", critical: "critical" },
 			callOnCritical: true,
 			autoCopy: false,
+			ttlSeconds: 0,
 			encryption: { enabled: false, algorithm: "aes-128-cbc" },
 		},
 		ntfy: {
@@ -246,7 +247,7 @@ function envLayerPatch(env: Record<string, string | undefined>): Record<string, 
 	return patch;
 }
 
-function normalizeConfig(config: NotifyConfig): NotifyConfig {
+export function normalizeConfig(config: NotifyConfig): NotifyConfig {
 	const out: NotifyConfig = { ...config };
 	out.provider = (out.provider === "ntfy" ? "ntfy" : "bark") as ProviderName;
 	out.timeoutMs = positiveNumber(out.timeoutMs, 8000);
@@ -265,6 +266,7 @@ function normalizeConfig(config: NotifyConfig): NotifyConfig {
 	out.bark.keys = Array.from(new Set(keys));
 	out.bark.baseUrl = String(out.bark.baseUrl || "https://api.day.app").replace(/\/+$/, "");
 	out.bark.group = typeof out.bark.group === "string" && out.bark.group.trim() !== "" ? out.bark.group : "pi";
+	out.bark.ttlSeconds = Number.isFinite(Number(out.bark.ttlSeconds)) ? Math.max(0, Math.floor(Number(out.bark.ttlSeconds))) : 0;
 	out.bark.level = normalizeLevels(out.bark.level);
 	out.bark.encryption.algorithm = BARK_ALGORITHMS.includes(out.bark.encryption.algorithm)
 		? out.bark.encryption.algorithm

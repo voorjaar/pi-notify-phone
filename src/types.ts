@@ -27,6 +27,11 @@ export interface NotifyRequest {
 	level?: NotifyLevel;
 	/** Provider grouping key. Defaults to the configured group. */
 	group?: string;
+	/**
+	 * Absolute server-side delivery time (epoch ms). Only ntfy supports this natively;
+	 * other providers fall back to the local scheduler.
+	 */
+	sendAt?: number;
 	/** URL to open when the notification is tapped. */
 	url?: string;
 	/** Provider sound (Bark sound name). */
@@ -73,6 +78,8 @@ export interface BarkConfig {
 	callOnCritical: boolean;
 	/** Ask the app to copy the notification body to the clipboard. */
 	autoCopy: boolean;
+	/** Seconds an archived message is kept by the Bark app (0 = unset). */
+	ttlSeconds: number;
 	/** Bark encrypted push (the whole payload JSON is encrypted). */
 	encryption: {
 		enabled: boolean;

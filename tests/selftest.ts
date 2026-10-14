@@ -4,11 +4,46 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { defaultConfig, findProblems, loadConfig, mergeConfig, resolveAgentDir } from "../src/config.ts";
+import { defaultConfig, findProblems, loadConfig, mergeConfig, normalizeConfig, resolveAgentDir } from "../src/config.ts";
+import { decryptBarkPayload, decryptNtfyBody, isNtfyEnvelope } from "../src/crypto.ts";
+import { buildBarkRequests, buildNtfyRequest, sendNotification } from "../src/providers.ts";
 import { formatDuration, formatRelative, parseDuration, parseWhen } from "../src/time.ts";
+import type { FetchLike, NotifyConfig } from "../src/types.ts";
 
 function scratchDir(): string {
 	return mkdtempSync(join(tmpdir(), "pi-notify-test-"));
+}
+
+function baseConfig(patch: Record<string, unknown> = {}): NotifyConfig {
+	return normalizeConfig(mergeConfig(defaultConfig("/tmp/agent-dir"), patch));
+}
+
+interface FakeResponse {
+	status: number;
+	body?: string;
+	error?: string;
+}
+
+interface FetchRecorder {
+	fetch: FetchLike;
+	calls: Array<{ url: string; method: string; headers: Record<string, string>; body: string }>;
+}
+
+function recordingFetch(responses: FakeResponse[]): FetchRecorder {
+	const calls: FetchRecorder["calls"] = [];
+	let index = 0;
+	const fetch: FetchLike = async (url, init) => {
+		calls.push({ url, method: init?.method ?? "GET", headers: init?.headers ?? {}, body: init?.body ?? "" });
+		const response = responses[Math.min(index, responses.length - 1)];
+		index += 1;
+		if (response.error) throw new Error(response.error);
+		return {
+			status: response.status,
+			ok: response.status >= 200 && response.status < 300,
+			text: async () => response.body ?? "",
+		};
+	};
+	return { fetch, calls };
 }
 
 test("parseDuration handles compound and spaced units", () => {
@@ -215,4 +250,144 @@ test("resolveAgentDir honours PI_CODING_AGENT_DIR", () => {
 test("defaultConfig points the schedule store inside the agent dir", () => {
 	const config = defaultConfig("/tmp/agent-dir");
 	assert.equal(config.scheduleFile, join("/tmp/agent-dir", "pi-notify-schedule.json"));
+});
+
+test("bark plain push posts one form request per device key", () => {
+	const config = baseConfig({ bark: { keys: ["keyA", "keyB"] } });
+	const requests = buildBarkRequests({ body: "build finished", level: "critical" }, config);
+	assert.equal(requests.length, 2);
+	assert.equal(requests[0].method, "POST");
+	assert.equal(requests[0].url, "https://api.day.app/keyA");
+	const form = new URLSearchParams(requests[0].body);
+	assert.equal(form.get("title"), "Pi");
+	assert.equal(form.get("body"), "build finished");
+	assert.equal(form.get("group"), "pi");
+	assert.equal(form.get("level"), "critical");
+	assert.equal(form.get("call"), "1");
+});
+
+test("bark encrypted push round-trips through the documented ciphertext parameter", () => {
+	const config = baseConfig({
+		bark: {
+			keys: ["keyA"],
+			encryption: { enabled: true, algorithm: "aes-128-cbc", key: "1234567890123456" },
+		},
+	});
+	const [request] = buildBarkRequests({ body: "密钥 ready", level: "warning", group: "pi-build" }, config);
+	const form = new URLSearchParams(request.body);
+	const ciphertext = form.get("ciphertext");
+	const iv = form.get("iv");
+	assert.ok(ciphertext && ciphertext.length > 0);
+	assert.ok(iv && iv.length === 16);
+	assert.equal(form.has("body"), false);
+	const json = decryptBarkPayload(ciphertext ?? "", "aes-128-cbc", "1234567890123456", iv ?? undefined);
+	const payload = JSON.parse(json) as Record<string, string>;
+	assert.equal(payload.body, "密钥 ready");
+	assert.equal(payload.group, "pi-build");
+	assert.equal(payload.level, "timeSensitive");
+});
+
+test("bark gcm keeps its nonce inside the ciphertext and sends no iv parameter", () => {
+	const config = baseConfig({
+		bark: {
+			keys: ["keyA"],
+			encryption: {
+				enabled: true,
+				algorithm: "aes-256-gcm",
+				key: "0123456789abcdef0123456789abcdef",
+				iv: "nonce1234567",
+			},
+		},
+	});
+	const [request] = buildBarkRequests({ body: "hello" }, config);
+	const form = new URLSearchParams(request.body);
+	assert.equal(form.has("iv"), false);
+	const json = decryptBarkPayload(form.get("ciphertext") ?? "", "aes-256-gcm", "0123456789abcdef0123456789abcdef");
+	assert.equal((JSON.parse(json) as Record<string, string>).body, "hello");
+});
+
+test("bark bad encryption key surfaces an error instead of throwing", async () => {
+	const config = baseConfig({
+		bark: { keys: ["keyA"], encryption: { enabled: true, algorithm: "aes-128-cbc", key: "too-short" } },
+	});
+	const result = await sendNotification({ body: "x" }, config, recordingFetch([{ status: 200, body: "ok" }]).fetch);
+	assert.equal(result.ok, false);
+	assert.match(result.detail ?? "", /must be 16 bytes/);
+});
+
+test("ntfy publish maps severity to priority and auth to headers", () => {
+	const config = baseConfig({ provider: "ntfy", ntfy: { topic: "my_topic", token: "tk_123", tags: ["pi"] } });
+	const request = buildNtfyRequest({ body: "done", level: "warning", url: "https://example.com/ci" }, config);
+	assert.equal(request.url, "https://ntfy.sh/my_topic");
+	assert.equal(request.headers.Title, "Pi");
+	assert.equal(request.headers.Priority, "4");
+	assert.equal(request.headers.Tags, "pi");
+	assert.equal(request.headers.Authorization, "Bearer tk_123");
+	assert.equal(request.headers.Click, "https://example.com/ci");
+	assert.equal(request.body, "done");
+});
+
+test("ntfy encodes non-ascii titles and schedules with the at parameter", () => {
+	const config = baseConfig({ provider: "ntfy", ntfy: { topic: "t", user: "me", password: "pw" } });
+	const request = buildNtfyRequest(
+		{ body: "任务完成", title: "任务完成", sendAt: Date.parse("2026-01-02T08:30:00Z") },
+		config,
+	);
+	assert.match(request.headers.Title, /^=\?UTF-8\?B\?/);
+	assert.equal(Buffer.from(request.headers.Title.slice("=?UTF-8?B?".length, -2), "base64").toString("utf8"), "任务完成");
+	assert.match(request.url, /\?at=2026-01-02T08%3A30%3A00\.000Z$/);
+	assert.equal(request.headers.Authorization, `Basic ${Buffer.from("me:pw", "utf8").toString("base64")}`);
+});
+
+test("ntfy encrypted body uses a decryptable envelope and keeps the title readable", () => {
+	const config = baseConfig({ provider: "ntfy", ntfy: { topic: "t", encryption: { enabled: true, key: "passphrase" } } });
+	const request = buildNtfyRequest({ body: "secret body" }, config);
+	assert.ok(isNtfyEnvelope(request.body));
+	assert.equal(decryptNtfyBody(request.body, "passphrase"), "secret body");
+	assert.equal(decryptNtfyBody(request.body, "wrong key"), undefined);
+});
+
+test("sendNotification retries 5xx and network failures up to the configured bound", async () => {
+	const recorder = recordingFetch([{ status: 500, body: "boom" }, { status: 503, body: "again" }, { status: 200, body: '{"id":"abc"}' }]);
+	const ok = await sendNotification({ body: "hi" }, baseConfig({ provider: "ntfy", ntfy: { topic: "t" }, retries: 2, retryDelayMs: 0 }), recorder.fetch);
+	assert.equal(ok.ok, true);
+	assert.equal(ok.attempts, 3);
+	assert.equal(recorder.calls.length, 3);
+
+	const failing = recordingFetch([{ status: 400, body: "bad topic" }]);
+	const badRequest = await sendNotification(
+		{ body: "hi" },
+		baseConfig({ provider: "ntfy", ntfy: { topic: "t" }, retries: 3, retryDelayMs: 0 }),
+		failing.fetch,
+	);
+	assert.equal(badRequest.ok, false);
+	// 4xx is not retryable.
+	assert.equal(badRequest.attempts, 1);
+
+	const broken = recordingFetch([{ error: "socket hang up" }]);
+	const net = await sendNotification(
+		{ body: "hi" },
+		baseConfig({ provider: "ntfy", ntfy: { topic: "t" }, retries: 1, retryDelayMs: 0 }),
+		broken.fetch,
+	);
+	assert.equal(net.ok, false);
+	assert.equal(net.attempts, 2);
+	assert.match(net.detail ?? "", /socket hang up/);
+});
+
+test("disabled notifications never reach the transport", async () => {
+	const recorder = recordingFetch([{ status: 200, body: "ok" }]);
+	const result = await sendNotification({ body: "hi" }, baseConfig({ enabled: false, bark: { keys: ["k"] } }), recorder.fetch);
+	assert.equal(result.ok, false);
+	assert.equal(recorder.calls.length, 0);
+});
+
+test("missing provider target reports instead of throwing", async () => {
+	const recorder = recordingFetch([{ status: 200, body: "ok" }]);
+	const noBark = await sendNotification({ body: "hi" }, baseConfig({ bark: { keys: [] } }), recorder.fetch);
+	assert.equal(noBark.ok, false);
+	assert.match(noBark.detail ?? "", /no bark device key/);
+	const noTopic = await sendNotification({ body: "hi" }, baseConfig({ provider: "ntfy", ntfy: { topic: "" } }), recorder.fetch);
+	assert.equal(noTopic.ok, false);
+	assert.match(noTopic.detail ?? "", /no ntfy topic/);
 });
