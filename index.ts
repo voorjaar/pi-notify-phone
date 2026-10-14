@@ -111,7 +111,8 @@ export default function (pi: ExtensionAPI) {
 		const pending = reminders().length;
 		const provider = config.provider;
 		const state = config.enabled ? (config.auto.enabled ? "on" : "manual only") : "off";
-		return `notify ${provider} ${state}${pending ? ` · ${pending} reminders` : ""}`;
+		const muted = bus.mutedUntil > Date.now();
+		return `notify ${provider} ${state}${muted ? " (muted)" : ""}${pending ? ` · ${pending} reminders` : ""}`;
 	}
 
 	function reportSend(scope: NotifyScope, result: SendResult, ctx: ExtensionContext): void {
@@ -315,13 +316,32 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
+	const notifyStatusTool = defineTool({
+		name: "notify_status",
+		label: "Notify status",
+		description: "Report how pi-notify is configured: provider, switches, pending reminders, and the last send attempts.",
+		promptSnippet: "Check how notifications are configured before promising one",
+		promptGuidelines: [
+			"Call notify_status before telling the user that a notification will arrive, so you can say whether notifications are actually enabled.",
+		],
+		parameters: Type.Object({}),
+		async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
+			refreshContext(ctx);
+			reloadContextConfig(ctx);
+			const recent = readNotifyLog(config.logFile, 5);
+			const history = recent.length === 0 ? "no send history yet" : recent.map((entry) => `${entry.ok ? "sent" : entry.detail ?? "failed"} ${entry.scope}`).join(", ");
+			return toolResult(`${describeStatus()}\nlast sends: ${history}`, { ok: problems.fatal.length === 0 });
+		},
+	});
+
 	pi.registerTool(notifyTool);
 	pi.registerTool(remindersTool);
+	pi.registerTool(notifyStatusTool);
 
 	// ---- command -------------------------------------------------------------
 
 	pi.registerCommand("notify", {
-		description: "Send, schedule, and control notifications (notify [on|off|status|test|send|schedule|list|cancel|clear|provider|decrypt])",
+		description: "Send, schedule, and control notifications (notify [on|off|status|test|send|schedule|list|cancel|clear|provider|scope|mute|log|decrypt])",
 		getArgumentCompletions(argumentPrefix) {
 			const prefix = (argumentPrefix ?? "").toLowerCase();
 			const options = [
@@ -339,6 +359,8 @@ export default function (pi: ExtensionAPI) {
 				"provider bark",
 				"provider ntfy",
 				"scope <name> on|off",
+				"mute [minutes]",
+				"unmute",
 				"log [n]",
 				"decrypt <text>",
 			];
@@ -452,6 +474,20 @@ export default function (pi: ExtensionAPI) {
 				ctx.ui.notify(`cleared ${removed} scheduled notification(s)`, "info");
 				return;
 			}
+			if (sub === "mute") {
+				const raw = Number(parts[1] ?? 30);
+				const minutes = Number.isFinite(raw) ? Math.min(24 * 60, Math.max(1, Math.floor(raw))) : 30;
+				bus.setMute(Date.now() + minutes * 60 * 1000);
+				ctx.ui.setStatus("pi-notify", statusLine());
+				ctx.ui.notify(`automatic notifications muted for ${minutes} min; manual sends still work`, "info");
+				return;
+			}
+			if (sub === "unmute") {
+				bus.setMute(0);
+				ctx.ui.setStatus("pi-notify", statusLine());
+				ctx.ui.notify("automatic notifications unmuted", "info");
+				return;
+			}
 			if (sub === "log") {
 				const raw = Number(parts[1] ?? 15);
 				const count = Number.isFinite(raw) ? Math.min(50, Math.max(1, Math.floor(raw))) : 15;
@@ -522,6 +558,7 @@ export default function (pi: ExtensionAPI) {
 			`encryption: ${config.provider === "bark" ? `${barkEnc.enabled ? `on (${barkEnc.algorithm})` : "off"}` : `${ntfyEnc.enabled ? "on (AES-256-GCM envelope)" : "off"}${config.ntfy.token || config.ntfy.user ? " · authenticated" : ""}`}`,
 		);
 		lines.push(`noise: minRun ${config.auto.minRunSeconds}s · throttle ${config.auto.throttleSeconds}s · body ${config.auto.maxBodyChars} chars`);
+		lines.push(`mute: ${bus.mutedUntil > Date.now() ? `automatic sends muted until ${formatWhen(bus.mutedUntil)}` : "off"}`);
 		lines.push(`reminders: ${reminders().length} pending · store ${config.scheduleFile} · history ${config.logEnabled ? config.logFile : "off"}`);
 		if (problems.fatal.length > 0) lines.push(`needs setup: ${problems.fatal.join(" · ")}`);
 		if (problems.warnings.length > 0) lines.push(`warnings: ${problems.warnings.join(" · ")}`);

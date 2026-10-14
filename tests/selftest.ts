@@ -648,3 +648,20 @@ test("maxLateMs and send history settings come from the config file", () => {
 		rmSync(dir, { recursive: true, force: true });
 	}
 });
+
+test("mute silences automatic scenarios but not manual sends", async () => {
+	const config = baseConfig({ logEnabled: false });
+	const bus = new NotifyBus(config, {
+		transport: async (): Promise<SendResult> => ({ ok: true, provider: "bark", detail: "sent", attempts: 1, encrypted: false }),
+		now: () => 5000,
+	});
+	bus.setMute(10_000);
+	const auto = await bus.send({ scope: "task_complete", body: "done", title: "t", level: "info" });
+	const manual = await bus.send({ scope: "manual", body: "hello", title: "t", level: "info" });
+	assert.equal(auto.ok, false);
+	assert.match(auto.detail ?? "", /muted/);
+	assert.equal(manual.ok, true);
+	bus.setMute(0);
+	const after = await bus.send({ scope: "task_failed", body: "boom", title: "t", level: "warning" });
+	assert.equal(after.ok, true);
+});

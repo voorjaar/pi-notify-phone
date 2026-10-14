@@ -52,7 +52,7 @@ Create `~/.pi/agent/pi-notify.json` with at least the provider you want to use:
 
 Copy [`config.example.json`](config.example.json) for the full set of options. Then check it:
 
-```
+```text
 /notify status
 /notify test
 ```text
@@ -144,7 +144,9 @@ Ask in plain language:
 - "ping me every day at 09:30 that the backup ran"
 
 The agent uses the `notify` tool (`in`, `at`, `every`, `level`, `url`, `group`, `sound`) and
-`notify_reminders` to list, cancel, or clear scheduled notifications.
+`notify_reminders` to list, cancel, or clear scheduled notifications. `notify_status` tells the
+agent how notifications are configured - provider, switches, pending reminders, and the last sends -
+so it can tell you whether a notification is actually on its way.
 
 ## Commands
 
@@ -160,6 +162,8 @@ The agent uses the `notify` tool (`in`, `at`, `every`, `level`, `url`, `group`, 
 /notify list                   scheduled notifications
 /notify cancel <id>            cancel one
 /notify clear                  cancel all
+/notify mute [minutes]         pause automatic notifications (default 30)
+/notify unmute                 resume them
 /notify log [n]                last n send attempts (sent, skipped, failed)
 /notify decrypt <text>         decrypt a pi-notify ntfy envelope
 ```

@@ -38,6 +38,11 @@ once for the same event.
 `notify_reminders` with `action: "list" | "cancel" | "clear"` (and `id` for cancel).
 The user can do the same with `/notify list`, `/notify cancel <id>`, `/notify clear`.
 
+Before you promise the user a notification, call `notify_status`. It reports the provider, the
+switches, pending reminders, and the last send attempts - so you can say whether notifications are
+actually enabled instead of assuming they are. If it reports a setup problem, tell the user what to
+add to `pi-notify.json` rather than retrying.
+
 ## Setup the user may need
 
 Configuration lives in `~/.pi/agent/pi-notify.json` (personal) and `.pi/pi-notify.json`

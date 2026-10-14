@@ -135,7 +135,8 @@ node scripts/send.ts "pi-notify" "hello" info
 - “每天 09:30 提醒我备份已经跑完”
 
 助手会用 `notify` 工具（`in`、`at`、`every`、`level`、`url`、`group`、`sound`），
-以及 `notify_reminders` 来列出、取消或清空已排定的通知。
+以及 `notify_reminders` 来列出、取消或清空已排定的通知。`notify_status` 会告诉助手当前通知是怎么配置的——
+通道、开关、待发送的提醒、最近的发送记录——这样它就能告诉你通知到底会不会发出去。
 
 ## 命令
 
@@ -151,6 +152,8 @@ node scripts/send.ts "pi-notify" "hello" info
 /notify list                   列出已排定的通知
 /notify cancel <id>            取消一条
 /notify clear                  全部取消
+/notify mute [分钟]            暂停自动通知（默认 30 分钟）
+/notify unmute                 恢复自动通知
 /notify log [n]                最近 n 次发送记录（已发、被跳过、失败）
 /notify decrypt <text>         解密一条 pi-notify 的 ntfy 信封
 ```

@@ -85,6 +85,8 @@ export class NotifyBus {
 	private readonly now: () => number;
 	private readonly lastSentAt = new Map<NotifyScope, number>();
 	private readonly lastBody = new Map<NotifyScope, string>();
+	/** Until this timestamp automatic scenarios stay silent; manual sends still work. */
+	private muteUntilMs = 0;
 
 	constructor(config: NotifyConfig, options: BusOptions) {
 		this.config = config;
@@ -98,6 +100,15 @@ export class NotifyBus {
 		this.config = config;
 	}
 
+	/** Silence automatic scenarios until the given timestamp (0 to unmute). */
+	setMute(untilMs: number): void {
+		this.muteUntilMs = untilMs;
+	}
+
+	get mutedUntil(): number {
+		return this.muteUntilMs;
+	}
+
 	getConfig(): NotifyConfig {
 		return this.config;
 	}
@@ -107,6 +118,7 @@ export class NotifyBus {
 		const config = this.config;
 		if (!config.enabled) return { allow: false, reason: "notifications are off" };
 		if (AUTOMATIC_SCOPES.includes(scope)) {
+			if (this.muteUntilMs > this.now()) return { allow: false, reason: "muted" };
 			if (!config.auto.enabled) return { allow: false, reason: "automatic notifications are off" };
 			if (!config.auto.scopes[scope]) return { allow: false, reason: `scope ${scope} is off` };
 		} else if (!config.auto.scopes.manual) {
