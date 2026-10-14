@@ -5,10 +5,12 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 import { defaultConfig, findProblems, loadConfig, mergeConfig, normalizeConfig, resolveAgentDir } from "../src/config.ts";
+import { ReminderScheduler, fileStore, makeId, memoryStore } from "../src/scheduler.ts";
+import { NotifyBus, composeRequest } from "../src/bus.ts";
 import { decryptBarkPayload, decryptNtfyBody, isNtfyEnvelope } from "../src/crypto.ts";
 import { buildBarkRequests, buildNtfyRequest, sendNotification } from "../src/providers.ts";
 import { formatDuration, formatRelative, parseDuration, parseWhen } from "../src/time.ts";
-import type { FetchLike, NotifyConfig } from "../src/types.ts";
+import type { Clock, FetchLike, NotifyConfig, NotifyRequest, ScheduleEntry, SendResult, TimerHandle } from "../src/types.ts";
 
 function scratchDir(): string {
 	return mkdtempSync(join(tmpdir(), "pi-notify-test-"));
@@ -390,4 +392,208 @@ test("missing provider target reports instead of throwing", async () => {
 	const noTopic = await sendNotification({ body: "hi" }, baseConfig({ provider: "ntfy", ntfy: { topic: "" } }), recorder.fetch);
 	assert.equal(noTopic.ok, false);
 	assert.match(noTopic.detail ?? "", /no ntfy topic/);
+});
+
+class FakeClock implements Clock {
+	private current = 0;
+	private nextId = 1;
+	private timers: Array<{ id: number; due: number; fn: () => void }> = [];
+
+	now(): number {
+		return this.current;
+	}
+
+	setTimeout(fn: () => void, ms: number): TimerHandle {
+		const id = this.nextId;
+		this.nextId += 1;
+		this.timers.push({ id, due: this.current + ms, fn });
+		return { id: String(id) };
+	}
+
+	clearTimeout(handle: TimerHandle): void {
+		this.timers = this.timers.filter((timer) => timer.id !== Number(handle.id));
+	}
+
+	async advance(ms: number): Promise<void> {
+		const target = this.current + ms;
+		for (;;) {
+			const due = this.timers.filter((timer) => timer.due <= target).sort((a, b) => a.due - b.due)[0];
+			if (!due) break;
+			this.current = due.due;
+			this.timers = this.timers.filter((timer) => timer.id !== due.id);
+			due.fn();
+			for (let i = 0; i < 4; i += 1) await Promise.resolve();
+		}
+		this.current = target;
+	}
+}
+
+function fakeSend(result: Partial<SendResult> = {}): (req: NotifyRequest) => Promise<SendResult> {
+	return async (req) => ({
+		ok: true,
+		provider: "bark",
+		attempts: 1,
+		encrypted: false,
+		detail: req.body,
+		...result,
+	});
+}
+
+test("scheduler delivers a one-shot reminder and removes it", async () => {
+	const clock = new FakeClock();
+	const delivered: Array<{ body: string; late: boolean }> = [];
+	const store = memoryStore();
+	const scheduler = new ReminderScheduler({ store, clock, deliver: (entry, late) => void delivered.push({ body: entry.body, late }) });
+	const entry = scheduler.add({ body: "stretch", dueAt: clock.now() + 60_000, everyMs: 0, source: "test" });
+	assert.equal(scheduler.list().length, 1);
+	await clock.advance(59_000);
+	assert.equal(delivered.length, 0);
+	await clock.advance(2_000);
+	assert.equal(delivered.length, 1);
+	assert.equal(delivered[0].body, "stretch");
+	assert.equal(delivered[0].late, false);
+	assert.equal(scheduler.list().length, 0);
+	assert.equal(store.load().length, 0);
+	assert.ok(entry.id.length > 0);
+});
+
+test("scheduler re-arms recurring reminders and skips due times another session delivered", async () => {
+	const clock = new FakeClock();
+	const fired: number[] = [];
+	const store = memoryStore();
+	const a = new ReminderScheduler({ store, clock, deliver: (entry) => void fired.push(`a:${entry.dueAt}`) });
+	const b = new ReminderScheduler({ store, clock, deliver: (entry) => void fired.push(`b:${entry.dueAt}`) });
+	a.add({ id: "hourly", body: "status check", dueAt: clock.now() + 3_600_000, everyMs: 3_600_000, source: "test" });
+	// b loads the same record before either timer fires.
+	b.arm();
+	await clock.advance(3_600_001);
+	assert.deepEqual(fired, ["a:3600000"]);
+	assert.equal(a.list().length, 1);
+	assert.equal(b.list().length, 1);
+	await clock.advance(3_600_001);
+	assert.deepEqual(fired, ["a:3600000", "a:7200000"]);
+});
+
+test("scheduler drops stale reminders and reports it", async () => {
+	const clock = new FakeClock();
+	const store = memoryStore([{ id: "stale", body: "old", dueAt: 1_000, everyMs: 0, createdAt: 0, source: "test" }]);
+	const events: string[] = [];
+	const scheduler = new ReminderScheduler({
+		store,
+		clock,
+		deliver: () => {},
+		maxLateMs: 60_000,
+		onEvent: (message) => events.push(message),
+	});
+	await clock.advance(120_000);
+	scheduler.arm();
+	assert.equal(scheduler.list().length, 0);
+	assert.match(events.join("\n"), /expired/);
+});
+
+test("scheduler cancel, clear and file persistence round-trip", async () => {
+	const dir = scratchDir();
+	try {
+		const path = join(dir, "nested", "schedule.json");
+		const clock = new FakeClock();
+		const first = new ReminderScheduler({ store: fileStore(path), clock, deliver: () => {} });
+		first.add({ id: "keep", body: "keep me", dueAt: clock.now() + 10 * 60_000, everyMs: 0, source: "test" });
+		first.add({ id: "drop", body: "drop me", dueAt: clock.now() + 10 * 60_000, everyMs: 0, source: "test" });
+		assert.equal(first.cancel("drop"), true);
+		assert.equal(first.cancel("missing"), false);
+		first.dispose();
+
+		const second = new ReminderScheduler({ store: fileStore(path), clock, deliver: () => {} });
+		second.arm();
+		assert.deepEqual(second.list().map((e) => e.id), ["keep"]);
+		assert.equal(second.clear(), 1);
+		assert.deepEqual(second.list(), []);
+		assert.equal(makeId("x").startsWith("x-"), true);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("bus applies the master, automatic and per-scope switches", async () => {
+	const clock = new FakeClock();
+	const sent: NotifyRequest[] = [];
+	const config = baseConfig({ auto: { scopes: { goal: false } } });
+	const bus = new NotifyBus(config, {
+		transport: async (req) => {
+			sent.push(req);
+			return { ok: true, provider: "bark", attempts: 1, encrypted: false };
+		},
+		now: () => clock.now(),
+	});
+
+	const goal = await bus.send({ scope: "goal", body: "goal done" });
+	assert.equal(goal.ok, false);
+	assert.match(goal.detail ?? "", /scope goal is off/);
+
+	const manual = await bus.send({ scope: "manual", body: "hello" });
+	assert.equal(manual.ok, true);
+
+	// Automatic scenarios are off, manual sends still work.
+	const bus2 = new NotifyBus(baseConfig({ auto: { enabled: false } }), { transport: fakeSend(), now: () => clock.now() });
+	const auto = await bus2.send({ scope: "task_complete", body: "done" });
+	assert.equal(auto.ok, false);
+	assert.match(auto.detail ?? "", /automatic notifications are off/);
+	const manual2 = await bus2.send({ scope: "manual", body: "still works" });
+	assert.equal(manual2.ok, true);
+
+	// Master switch blocks everything.
+	const bus3 = new NotifyBus(baseConfig({ enabled: false }), { transport: fakeSend(), now: () => clock.now() });
+	const blocked = await bus3.send({ scope: "manual", body: "nope" });
+	assert.equal(blocked.ok, false);
+	assert.match(blocked.detail ?? "", /notifications are off/);
+});
+
+test("bus throttles automatic repeats and skips duplicate bodies", async () => {
+	const clock = new FakeClock();
+	const bus = new NotifyBus(baseConfig({ auto: { throttleSeconds: 30 } }), { transport: fakeSend(), now: () => clock.now() });
+	const first = await bus.send({ scope: "question", body: "which one?" });
+	assert.equal(first.ok, true);
+	await clock.advance(10_000);
+	const second = await bus.send({ scope: "question", body: "which one?" });
+	assert.equal(second.ok, false);
+	assert.match(second.detail ?? "", /throttled/);
+	await clock.advance(25_000);
+	const third = await bus.send({ scope: "question", body: "which one?" });
+	assert.equal(third.ok, false);
+	assert.match(third.detail ?? "", /duplicate/);
+	// Manual sends are never throttled.
+	const manual = await bus.send({ scope: "manual", body: "another question" });
+	assert.equal(manual.ok, true);
+});
+
+test("composeRequest adds metadata, the session name, and truncates long bodies", () => {
+	const config = baseConfig({ includeSession: true, auto: { maxBodyChars: 40 } });
+	const request = composeRequest(
+		{ scope: "task_complete", body: "build finished", meta: ["took 3m12s", "  "] },
+		config,
+		"pi-notify",
+	);
+	assert.equal(request.title, "Pi");
+	assert.equal(request.group, "pi");
+	assert.equal(request.body, "build finished\ntook 3m12s\nsession: pi-notify".slice(0, 39) + "…");
+	const noSession = composeRequest({ scope: "manual", body: "short", title: "  Custom  " }, config, undefined);
+	assert.equal(noSession.title, "Custom");
+	assert.equal(noSession.body, "short");
+});
+
+test("scheduler entries survive a malformed store file", () => {
+	const dir = scratchDir();
+	try {
+		const path = join(dir, "schedule.json");
+		writeFileSync(path, "{not an array}");
+		const store = fileStore(path);
+		const entries = store.load();
+		assert.deepEqual(entries, []);
+		assert.match(store.lastError ?? "", /must contain a JSON array|not readable/);
+		writeFileSync(path, JSON.stringify([{ id: "a", body: "b", dueAt: "nope" }, { id: "c", body: "d", dueAt: 123 }]));
+		const mixed = fileStore(path).load();
+		assert.deepEqual(mixed.map((entry: ScheduleEntry) => entry.id), ["c"]);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
 });
