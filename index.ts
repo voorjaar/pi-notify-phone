@@ -352,7 +352,7 @@ export default function (pi: ExtensionAPI) {
 				"status",
 				"test",
 				"send <text>",
-				"schedule <when> <text>",
+				"schedule <when> <text> [every <dur>]",
 				"list",
 				"cancel <id>",
 				"clear",
@@ -437,16 +437,16 @@ export default function (pi: ExtensionAPI) {
 				const rest = parts.slice(1).join(" ");
 				const parsed = splitSchedule(rest);
 				if (!parsed) {
-					ctx.ui.notify("usage: /notify schedule <when> <text>   e.g. /notify schedule 20m stretch", "warning");
+					ctx.ui.notify("usage: /notify schedule <when> <text> [every <duration>]   e.g. /notify schedule 20m stretch", "warning");
 					return;
 				}
-				const entry = scheduler?.add({ body: parsed.text, title: "Reminder", level: "info", dueAt: parsed.dueAt, everyMs: 0, source: "command" });
+				const entry = scheduler?.add({ body: parsed.text, title: "Reminder", level: "info", dueAt: parsed.dueAt, everyMs: parsed.everyMs, source: "command" });
 				if (!entry) {
 					ctx.ui.notify("scheduler unavailable", "error");
 					return;
 				}
 				ctx.ui.setStatus("pi-notify", statusLine());
-				ctx.ui.notify(`scheduled ${entry.id} for ${formatWhen(entry.dueAt)} (${formatRelative(entry.dueAt, Date.now())})`, "info");
+				ctx.ui.notify(`scheduled ${entry.id} for ${formatWhen(entry.dueAt)}${entry.everyMs > 0 ? ` every ${formatDuration(entry.everyMs)}` : ""} (${formatRelative(entry.dueAt, Date.now())})`, "info");
 				return;
 			}
 			if (sub === "list") {
@@ -529,18 +529,26 @@ export default function (pi: ExtensionAPI) {
 		return keys.map((key) => `${key.slice(0, 3)}…${key.slice(-3)}`).join(", ");
 	}
 
-	function splitSchedule(rest: string): { dueAt: number; text: string } | undefined {
+	function splitSchedule(rest: string): { dueAt: number; text: string; everyMs: number } | undefined {
 		if (!rest) return undefined;
-		const parts = rest.split(/\s+/);
+		const initial = rest.split(/\s+/);
 		// Try the first token, then the first two tokens, as the time expression.
 		for (let take = 1; take <= 2; take += 1) {
-			if (parts.length <= take) break;
-			const whenText = parts.slice(0, take).join(" ");
+			if (initial.length <= take) break;
+			const whenText = initial.slice(0, take).join(" ");
 			const dueAt = parseWhen(whenText, Date.now());
-			if (dueAt !== undefined) {
-				const text = parts.slice(take).join(" ");
-				if (text) return { dueAt, text };
+			if (dueAt === undefined) continue;
+			let parts = initial.slice(take);
+			let everyMs = 0;
+			if (parts.length >= 2 && parts[parts.length - 2] === "every") {
+				const parsed = parseDuration(parts[parts.length - 1]);
+				if (parsed !== undefined) {
+					everyMs = parsed;
+					parts = parts.slice(0, parts.length - 2);
+				}
 			}
+			const text = parts.join(" ");
+			if (text) return { dueAt, text, everyMs };
 		}
 		return undefined;
 	}

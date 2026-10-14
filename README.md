@@ -80,7 +80,7 @@ Invalid values are ignored and reported by `/notify status` instead of breaking 
 | `provider` | `bark` | `bark` or `ntfy` |
 | `enabled` | `true` | Master switch. Off sends nothing, including manual sends. |
 | `titlePrefix` | `Pi` | Prefix for notification titles; `null` disables it. |
-| `includeSession` | `true` | Append the project name to titles. |
+| `includeSession` | `true` | Append `session: <project name>` to every body. |
 | `timeoutMs` | `8000` | Per-attempt HTTP timeout. |
 | `retries` | `2` | Retries for 5xx and network errors (not for 4xx). |
 | `bark.key` / `bark.keys` | - | Device key(s) from the Bark app. Multiple keys send to multiple devices. |
@@ -158,7 +158,7 @@ so it can tell you whether a notification is actually on its way.
 /notify provider bark|ntfy     transport (this session)
 /notify test                   send one notification to check delivery
 /notify send <text>            send now
-/notify schedule <when> <text> e.g. /notify schedule 20m stretch
+/notify schedule <when> <text> [every <dur>]  e.g. /notify schedule 09:30 standup every 1d
 /notify list                   scheduled notifications
 /notify cancel <id>            cancel one
 /notify clear                  cancel all

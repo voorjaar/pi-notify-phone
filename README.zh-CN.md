@@ -71,7 +71,7 @@ node scripts/send.ts "pi-notify" "hello" info
 | `provider` | `bark` | `bark` 或 `ntfy` |
 | `enabled` | `true` | 总开关。关掉后什么都不发，包括手动发送。 |
 | `titlePrefix` | `Pi` | 通知标题前缀；`null` 表示不加前缀。 |
-| `includeSession` | `true` | 标题里附上项目名。 |
+| `includeSession` | `true` | 每条正文末尾附上 `session: <项目名>`。 |
 | `timeoutMs` | `8000` | 单次请求超时。 |
 | `retries` | `2` | 5xx 与网络错误的重试次数（4xx 不重试）。 |
 | `bark.key` / `bark.keys` | - | Bark App 里的设备密钥。多个密钥会给多台设备发送。 |
@@ -148,7 +148,7 @@ node scripts/send.ts "pi-notify" "hello" info
 /notify provider bark|ntfy     切换通道（本次会话）
 /notify test                   发一条通知验证送达
 /notify send <text>            立刻发送
-/notify schedule <when> <text> 例如 /notify schedule 20m stretch
+/notify schedule <when> <text> [every <dur>]  例如 /notify schedule 09:30 站会 every 1d
 /notify list                   列出已排定的通知
 /notify cancel <id>            取消一条
 /notify clear                  全部取消
