@@ -21,7 +21,7 @@ Pi 跑完一个长任务  ->  pi-notify  ->  https://api.day.app/...  ->  手机
 ## 安装
 
 ```bash
-pi install git:github.com/voorjaar/pi-notify
+pi install git:http://macminion.local:4096/voorjaar/pi-notify
 ```
 
 或者让 Pi 直接指向本地目录：

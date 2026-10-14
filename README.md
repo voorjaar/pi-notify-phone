@@ -30,8 +30,8 @@ Pi finishes a long task  ->  pi-notify  ->  https://api.day.app/...  ->  your ph
 ## Install
 
 ```bash
-pi install git:github.com/voorjaar/pi-notify
-```text
+pi install git:http://macminion.local:4096/voorjaar/pi-notify
+```
 
 Or point Pi at a local checkout:
 
@@ -48,14 +48,14 @@ Create `~/.pi/agent/pi-notify.json` with at least the provider you want to use:
   "provider": "bark",
   "bark": { "key": "your-bark-device-key" }
 }
-```text
+```
 
 Copy [`config.example.json`](config.example.json) for the full set of options. Then check it:
 
 ```text
 /notify status
 /notify test
-```text
+```
 
 You can also verify delivery without a Pi session:
 
@@ -189,7 +189,7 @@ the agent can turn such an envelope back into readable text.
 
 ```bash
 node --test tests/selftest.ts
-```text
+```
 
 The self-test covers time parsing, config layering, both transports, both encryption paths,
 reminder scheduling, and the notification switches. It uses a fake transport, so it never sends
