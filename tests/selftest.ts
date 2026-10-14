@@ -665,3 +665,20 @@ test("mute silences automatic scenarios but not manual sends", async () => {
 	const after = await bus.send({ scope: "task_failed", body: "boom", title: "t", level: "warning" });
 	assert.equal(after.ok, true);
 });
+
+test("includeSession controls whether the project name is appended", async () => {
+	const bodies: string[] = [];
+	const makeBus = (includeSession: boolean) =>
+		new NotifyBus(baseConfig({ includeSession, logEnabled: false }), {
+			transport: async (req): Promise<SendResult> => {
+				bodies.push(req.body);
+				return { ok: true, provider: "bark", detail: "sent", attempts: 1, encrypted: false };
+			},
+			sessionName: () => "demo-project",
+			now: () => 1000,
+		});
+	await makeBus(true).send({ scope: "manual", body: "one", title: "t", level: "info" });
+	await makeBus(false).send({ scope: "manual", body: "two", title: "t", level: "info" });
+	assert.match(bodies[0], /session: demo-project/);
+	assert.doesNotMatch(bodies[1], /session:/);
+});

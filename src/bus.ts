@@ -136,7 +136,7 @@ export class NotifyBus {
 
 	async send(input: ComposedRequest): Promise<SendResult> {
 		const config = this.config;
-		const request = composeRequest(input, config, this.sessionName?.());
+		const request = composeRequest(input, config, config.includeSession ? this.sessionName?.() : undefined);
 		const decision = this.gate(input.scope);
 		if (!decision.allow) {
 			return this.logSend(undefined, input.scope, {
