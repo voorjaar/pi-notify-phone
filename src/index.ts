@@ -235,11 +235,8 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("ui_prompt_start", async (event, ctx) => {
-		if (questionDedupe.shouldSkipUiPrompt(Date.now())) {
-			// A question notification already covered this dialog; log the suppression for debugging.
-			void bus.send({ scope: "ui_prompt", title: "Waiting for input", body: event.title ?? "", level: "warning" }, { logOnly: true });
-			return;
-		}
+		// One blocking ask_user_question arrives as both events; the question notification covers it.
+		if (questionDedupe.shouldSkipUiPrompt(Date.now())) return;
 		notify("ui_prompt", { title: "Waiting for input", body: event.title ? `${event.kind}: ${event.title}` : `Pi is waiting for ${event.kind} input.`, level: "warning" }, ctx);
 	});
 
