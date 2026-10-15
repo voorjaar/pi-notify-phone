@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 
 import { NotifyBus, QuestionUiDedupe, decideRunEnd, readNotifyLog } from "./bus.ts";
 import { nextGoalActive } from "./goals.ts";
-import { taskStartBody } from "./announcements.ts";
+import { messageText, taskStartBody } from "./announcements.ts";
 import { loadConfig, resolveAgentDir } from "./config.ts";
 import { decryptNtfyBody, isNtfyEnvelope } from "./crypto.ts";
 import { sendNotification } from "./providers.ts";
@@ -166,14 +166,22 @@ export default function (pi: ExtensionAPI) {
 		const message = event.message;
 		if (message.role !== "assistant") {
 			const content = (message as { content?: unknown }).content;
-			const text = typeof content === "string" ? content : JSON.stringify(content ?? "");
+			const text = messageText(content);
 			// The first user message of a run is what started it, so it is the best body for the notice.
 			if (message.role === "user" && !taskStartAnnounced) {
 				taskStartAnnounced = true;
 				notify("task_start", { title: "Task started", body: taskStartBody(text), level: "info" }, ctx);
 			}
-			// A goal continuation turn means a goal is still running in this session.
-			if (text.includes("pi_goal_continuation")) goalActive = nextGoalActive(goalActive, { type: "goal_continuation" });
+			// A goal continuation turn means a goal is running. A goal the user started with a slash
+			// command (/goal-direct) never calls create_goal, so the marker is the only signal we get.
+			if (text.includes("pi_goal_continuation")) {
+				const wasActive = goalActive;
+				goalActive = nextGoalActive(goalActive, { type: "goal_continuation" });
+				if (!wasActive) {
+					if (!goalStartedAt) goalStartedAt = Date.now();
+					notify("goal", { title: "Goal started", body: "A goal is running in this session.", level: "info" }, ctx);
+				}
+			}
 			return;
 		}
 		run.lastStopReason = message.stopReason;

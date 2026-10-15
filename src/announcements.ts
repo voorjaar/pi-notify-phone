@@ -4,6 +4,28 @@
 const TASK_START_SNIPPET_CHARS = 200;
 
 /**
+ * Flatten a message's content into plain text. Pi hands content through as a string or as a list of
+ * blocks, so stringifying it directly would put a JSON list in the notification body.
+ */
+export function messageText(content: unknown): string {
+	if (typeof content === "string") return content;
+	if (Array.isArray(content)) {
+		return content
+			.map((block) => {
+				if (typeof block === "string") return block;
+				if (block && typeof block === "object") {
+					const text = (block as { text?: unknown }).text;
+					if (typeof text === "string") return text;
+				}
+				return "";
+			})
+			.filter((part) => part.length > 0)
+			.join("\n");
+	}
+	return "";
+}
+
+/**
  * Turn the text of the message that started a run into a notification body.
  * Harness markers (a goal continuation, for example) say nothing the user did not already know,
  * so they collapse to a plain label.

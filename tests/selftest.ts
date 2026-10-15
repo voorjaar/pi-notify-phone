@@ -8,7 +8,7 @@ import { defaultConfig, findProblems, loadConfig, mergeConfig, normalizeConfig, 
 import { ReminderScheduler, fileStore, makeId, memoryStore } from "../src/scheduler.ts";
 import { NotifyBus, QuestionUiDedupe, composeRequest, decideRunEnd, readNotifyLog } from "../src/bus.ts";
 import { nextGoalActive } from "../src/goals.ts";
-import { taskStartBody } from "../src/announcements.ts";
+import { messageText, taskStartBody } from "../src/announcements.ts";
 import { decryptBarkPayload, decryptNtfyBody, isNtfyEnvelope } from "../src/crypto.ts";
 import { buildBarkRequests, buildNtfyRequest, sendNotification } from "../src/providers.ts";
 import { formatDuration, formatRelative, parseDuration, parseWhen } from "../src/time.ts";
@@ -815,6 +815,17 @@ test("the bus gates task_start like any other automatic scope", async () => {
 	const on = new NotifyBus(baseConfig({ auto: { scopes: { task_start: true } } }), { transport: fakeSend(), now: () => clock.now() });
 	const allowed = await on.send({ scope: "task_start", body: "a run started" });
 	assert.equal(allowed.ok, true);
+});
+
+test("message content flattens to text instead of a JSON list", () => {
+	assert.equal(messageText("plain prompt"), "plain prompt");
+	assert.equal(messageText([{ type: "text", text: "first line" }, { type: "text", text: "second line" }]), "first line\nsecond line");
+	assert.equal(messageText([{ type: "image", data: "x" }, { type: "text", text: "after the image" }]), "after the image");
+	assert.equal(messageText(undefined), "");
+	assert.equal(messageText(null), "");
+	const body = taskStartBody(messageText([{ type: "text", text: "fix the failing test" }]));
+	assert.equal(body, "fix the failing test");
+	assert.ok(!body.startsWith("["), "a notification body must not be a JSON list");
 });
 
 test("task_start bodies quote the prompt and hide harness markers", () => {
