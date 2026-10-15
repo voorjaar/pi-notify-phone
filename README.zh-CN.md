@@ -203,6 +203,10 @@ node --test tests/selftest.ts
 - 关闭加密时，单次提醒会使用 ntfy 的服务端定时（`Send At`）；周期性提醒由扩展自己调度。
 - 扩展读不到你的手机，所以无法确认通知是否真的送达。
 
+## 更新记录
+
+每个版本的改动记录见 [CHANGELOG.md](CHANGELOG.md)。
+
 ## 许可
 
 MIT，见 [LICENSE](LICENSE)。

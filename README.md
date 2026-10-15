@@ -223,6 +223,10 @@ real notifications.
 - The extension does not read your phone, so it cannot tell you whether a notification was
   actually delivered.
 
+## Changelog
+
+Release notes for every version are in [CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
