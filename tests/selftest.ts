@@ -682,3 +682,28 @@ test("includeSession controls whether the project name is appended", async () =>
 	assert.match(bodies[0], /session: demo-project/);
 	assert.doesNotMatch(bodies[1], /session:/);
 });
+
+test("task and goal minimum durations default to zero and can be raised", () => {
+	const dir = scratchDir();
+	try {
+		const base = defaultConfig("/tmp/agent-dir");
+		assert.equal(base.auto.minRunSeconds, 0);
+		assert.equal(base.auto.goalMinSeconds, 0);
+
+		mkdirSync(join(dir, "agent"), { recursive: true });
+		writeFileSync(join(dir, "agent", "pi-notify.json"), JSON.stringify({ auto: { minRunSeconds: 180, goalMinSeconds: 60 } }));
+		const fromFile = loadConfig({ cwd: dir, agentDir: join(dir, "agent"), env: {} });
+		assert.equal(fromFile.config.auto.minRunSeconds, 180);
+		assert.equal(fromFile.config.auto.goalMinSeconds, 60);
+
+		const fromEnv = loadConfig({ cwd: dir, agentDir: join(dir, "agent"), env: { PI_NOTIFY_MIN_RUN_SECONDS: "120", PI_NOTIFY_GOAL_MIN_SECONDS: "30" } });
+		assert.equal(fromEnv.config.auto.minRunSeconds, 120);
+		assert.equal(fromEnv.config.auto.goalMinSeconds, 30);
+
+		const broken = normalizeConfig(mergeConfig(base, { auto: { minRunSeconds: -5, goalMinSeconds: "nope" } }));
+		assert.equal(broken.auto.minRunSeconds, 0);
+		assert.equal(broken.auto.goalMinSeconds, 0);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});

@@ -44,6 +44,7 @@ export default function (pi: ExtensionAPI) {
 	let latestCtx: ExtensionContext | undefined;
 	let scheduler: ReminderScheduler | undefined;
 	let run: RunState = { startedAt: 0, turns: 0, toolErrors: 0 };
+	let goalStartedAt = 0;
 
 	const bus: NotifyBus = new NotifyBus(config, {
 		transport: (req): Promise<SendResult> => sendNotification(req, bus.getConfig(), fetchImpl),
@@ -131,6 +132,7 @@ export default function (pi: ExtensionAPI) {
 		reloadContextConfig(ctx);
 		armScheduler(ctx);
 		run = { startedAt: 0, turns: 0, toolErrors: 0 };
+		goalStartedAt = 0;
 		if (problems.fatal.length > 0) {
 			ctx.ui.notify(`pi-notify: ${problems.fatal.join(" · ")} - see /notify status`, "warning");
 		}
@@ -185,12 +187,24 @@ export default function (pi: ExtensionAPI) {
 		}
 		if (event.toolName === "update_goal") {
 			const status = typeof event.input?.status === "string" ? event.input.status : "";
-			if (status === "complete" || status === "blocked" || status === "paused") {
-				notify("goal", { title: `Goal ${status}`, body: typeof event.input?.reason === "string" ? event.input.reason : `The current goal is ${status}.`, level: status === "blocked" ? "warning" : "info" }, ctx);
+			const reason = typeof event.input?.reason === "string" ? event.input.reason : `The current goal is ${status}.`;
+			if (status === "complete") {
+				const startedAt = goalStartedAt || run.startedAt || Date.now();
+				const seconds = Math.round((Date.now() - startedAt) / 1000);
+				// A goal that finished immediately is usually something the user is already watching.
+				if (seconds >= config.auto.goalMinSeconds) {
+					notify("goal", { title: "Goal complete", body: reason, meta: [`goal ran ${formatDuration(seconds * 1000)}`], level: "info" }, ctx);
+				}
+				goalStartedAt = 0;
+				return;
+			}
+			if (status === "blocked" || status === "paused") {
+				notify("goal", { title: `Goal ${status}`, body: reason, level: "warning" }, ctx);
 			}
 			return;
 		}
 		if (event.toolName === "create_goal") {
+			goalStartedAt = Date.now();
 			notify("goal", { title: "Goal started", body: "A new goal is running.", level: "info" }, ctx);
 		}
 	});
@@ -565,7 +579,7 @@ export default function (pi: ExtensionAPI) {
 		lines.push(
 			`encryption: ${config.provider === "bark" ? `${barkEnc.enabled ? `on (${barkEnc.algorithm})` : "off"}` : `${ntfyEnc.enabled ? "on (AES-256-GCM envelope)" : "off"}${config.ntfy.token || config.ntfy.user ? " · authenticated" : ""}`}`,
 		);
-		lines.push(`noise: minRun ${config.auto.minRunSeconds}s · throttle ${config.auto.throttleSeconds}s · body ${config.auto.maxBodyChars} chars`);
+		lines.push(`noise: minRun ${config.auto.minRunSeconds}s · goalMin ${config.auto.goalMinSeconds}s · throttle ${config.auto.throttleSeconds}s · body ${config.auto.maxBodyChars} chars`);
 		lines.push(`mute: ${bus.mutedUntil > Date.now() ? `automatic sends muted until ${formatWhen(bus.mutedUntil)}` : "off"}`);
 		lines.push(`reminders: ${reminders().length} pending · store ${config.scheduleFile} · history ${config.logEnabled ? config.logFile : "off"}`);
 		if (problems.fatal.length > 0) lines.push(`needs setup: ${problems.fatal.join(" · ")}`);

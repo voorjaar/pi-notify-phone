@@ -121,8 +121,10 @@ export interface AutoConfig {
 	enabled: boolean;
 	/** Per-scenario switches. */
 	scopes: Record<NotifyScope, boolean>;
-	/** Skip task_complete for runs shorter than this (the user is still watching). */
+	/** Skip task_complete for runs shorter than this. 0 sends every finished run. */
 	minRunSeconds: number;
+	/** Skip goal-complete for goals shorter than this. 0 sends every goal completion. */
+	goalMinSeconds: number;
 	/** Minimum gap between two automatic notifications from the same scenario. */
 	throttleSeconds: number;
 	/** Bodies longer than this are truncated for the transport. */

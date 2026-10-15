@@ -101,7 +101,8 @@ node scripts/send.ts "pi-notify" "hello" info
 | `ntfy.encryption.key` | - | 任意口令，用 PBKDF2-SHA256 派生；也可以直接给 32 字节密钥的十六进制。 |
 | `auto.enabled` | `true` | 自动场景通知。 |
 | `auto.scopes` | 见下表 | 每个场景各自的开关。 |
-| `auto.minRunSeconds` | `20` | 只有运行时长不少于这个值才通知。 |
+| `auto.minRunSeconds` | `0` | 触发“任务完成”通知所需的最短运行时长。`0` 表示每次完成都发；`180` 表示只有三分钟以上的任务才发。 |
+| `auto.goalMinSeconds` | `0` | “goal 完成”通知的同样门槛，从 goal 开始的那一刻算起。 |
 | `auto.throttleSeconds` | `15` | 同一场景两次通知之间的最小间隔。 |
 | `auto.maxBodyChars` | `900` | 正文超过这个长度会被截断。 |
 | `auto.notifyAborted` | `false` | 运行被中止时是否通知。 |
@@ -126,7 +127,7 @@ node scripts/send.ts "pi-notify" "hello" info
 
 环境变量覆盖（优先级高于配置文件）：`PI_NOTIFY_PROVIDER`、`PI_NOTIFY_ENABLED`、
 `PI_NOTIFY_TITLE`、`PI_NOTIFY_AUTO_ENABLED`、`PI_NOTIFY_AUTO_SCOPES=question:on,goal:off`、
-`PI_NOTIFY_MIN_RUN_SECONDS`、`PI_NOTIFY_THROTTLE_SECONDS`、`PI_NOTIFY_BARK_KEY`
+`PI_NOTIFY_MIN_RUN_SECONDS`、`PI_NOTIFY_GOAL_MIN_SECONDS`、`PI_NOTIFY_THROTTLE_SECONDS`、`PI_NOTIFY_BARK_KEY`
 （逗号分隔可写多台设备）、`PI_NOTIFY_BARK_BASE_URL`、`PI_NOTIFY_BARK_GROUP`、
 `PI_NOTIFY_BARK_SOUND`、`PI_NOTIFY_BARK_ICON`、`PI_NOTIFY_BARK_ENCRYPT`、
 `PI_NOTIFY_BARK_ENCRYPT_KEY`、`PI_NOTIFY_BARK_ENCRYPT_IV`、`PI_NOTIFY_BARK_ENCRYPT_ALGORITHM`、

@@ -110,7 +110,8 @@ Invalid values are ignored and reported by `/notify status` instead of breaking 
 | `ntfy.encryption.key` | - | Any passphrase; derived with PBKDF2-SHA256, or 32 raw key bytes as hex. |
 | `auto.enabled` | `true` | Automatic scenario notifications. |
 | `auto.scopes` | see below | Per-scenario switches. |
-| `auto.minRunSeconds` | `20` | Only notify for runs at least this long. |
+| `auto.minRunSeconds` | `0` | Minimum length of a run before a task-complete notification is sent. `0` sends for every finished run; `180` sends only for runs of three minutes or more. |
+| `auto.goalMinSeconds` | `0` | Same gate for goal-complete notifications, measured from the moment the goal started. |
 | `auto.throttleSeconds` | `15` | Minimum gap between notifications per scope. |
 | `auto.maxBodyChars` | `900` | Bodies longer than this are truncated. |
 | `auto.notifyAborted` | `false` | Notify when a run is aborted. |
@@ -135,7 +136,7 @@ Scenario scopes (`auto.scopes`), all default `true` except `tool_error`:
 
 Environment overrides (they win over the files): `PI_NOTIFY_PROVIDER`, `PI_NOTIFY_ENABLED`,
 `PI_NOTIFY_TITLE`, `PI_NOTIFY_AUTO_ENABLED`, `PI_NOTIFY_AUTO_SCOPES=question:on,goal:off`,
-`PI_NOTIFY_MIN_RUN_SECONDS`, `PI_NOTIFY_THROTTLE_SECONDS`, `PI_NOTIFY_BARK_KEY`
+`PI_NOTIFY_MIN_RUN_SECONDS`, `PI_NOTIFY_GOAL_MIN_SECONDS`, `PI_NOTIFY_THROTTLE_SECONDS`, `PI_NOTIFY_BARK_KEY`
 (comma-separated for several devices), `PI_NOTIFY_BARK_BASE_URL`, `PI_NOTIFY_BARK_GROUP`,
 `PI_NOTIFY_BARK_SOUND`, `PI_NOTIFY_BARK_ICON`, `PI_NOTIFY_BARK_ENCRYPT`,
 `PI_NOTIFY_BARK_ENCRYPT_KEY`, `PI_NOTIFY_BARK_ENCRYPT_IV`, `PI_NOTIFY_BARK_ENCRYPT_ALGORITHM`,

@@ -44,7 +44,8 @@
       "reminder": true,
       "manual": true
     },
-    "minRunSeconds": 20,
+    "minRunSeconds": 0,
+    "goalMinSeconds": 0,
     "throttleSeconds": 15,
     "maxBodyChars": 900,
     "notifyAborted": false
