@@ -1,6 +1,6 @@
 {
   "name": "pi-notify-phone",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Send phone/desktop notifications from Pi through Bark or ntfy: task done/failed, questions, goal events, reminders and schedules",
   "type": "module",
   "license": "MIT",
@@ -26,7 +26,7 @@
   ],
   "pi": {
     "extensions": [
-      "./index.ts"
+      "./src/index.ts"
     ],
     "skills": [
       "./skills"
@@ -42,7 +42,6 @@
     "typebox": "*"
   },
   "files": [
-    "index.ts",
     "src/",
     "scripts/",
     "skills/",

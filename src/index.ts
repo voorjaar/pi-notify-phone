@@ -12,16 +12,17 @@ import { basename } from "node:path";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { NotifyBus, decideRunEnd, readNotifyLog } from "./src/bus.ts";
-import { loadConfig, resolveAgentDir } from "./src/config.ts";
-import { decryptNtfyBody, isNtfyEnvelope } from "./src/crypto.ts";
-import { sendNotification } from "./src/providers.ts";
-import { ReminderScheduler, fileStore } from "./src/scheduler.ts";
-import { formatDuration, formatRelative, formatWhen, parseDuration, parseWhen } from "./src/time.ts";
-import type { FetchLike, NotifyConfig, NotifyLevel, NotifyRequest, NotifyScope, ScheduleEntry, SendResult } from "./src/types.ts";
+import { NotifyBus, decideRunEnd, readNotifyLog } from "./bus.ts";
+import { nextGoalActive } from "./goals.ts";
+import { loadConfig, resolveAgentDir } from "./config.ts";
+import { decryptNtfyBody, isNtfyEnvelope } from "./crypto.ts";
+import { sendNotification } from "./providers.ts";
+import { ReminderScheduler, fileStore } from "./scheduler.ts";
+import { formatDuration, formatRelative, formatWhen, parseDuration, parseWhen } from "./time.ts";
+import type { FetchLike, NotifyConfig, NotifyLevel, NotifyRequest, NotifyScope, ScheduleEntry, SendResult } from "./types.ts";
 
 const EXT_DIR = dirname(fileURLToPath(import.meta.url));
-const SKILL_PATH = join(EXT_DIR, "skills", "notify", "SKILL.md");
+const SKILL_PATH = join(EXT_DIR, "..", "skills", "notify", "SKILL.md");
 
 const SCOPES: NotifyScope[] = ["task_complete", "task_failed", "question", "goal", "tool_error", "ui_prompt", "reminder", "manual"];
 
@@ -134,7 +135,7 @@ export default function (pi: ExtensionAPI) {
 		armScheduler(ctx);
 		run = { startedAt: 0, turns: 0, toolErrors: 0 };
 		goalStartedAt = 0;
-		goalActive = false;
+		goalActive = nextGoalActive(goalActive, { type: "session_start" });
 		if (problems.fatal.length > 0) {
 			ctx.ui.notify(`pi-notify: ${problems.fatal.join(" · ")} - see /notify status`, "warning");
 		}
@@ -163,7 +164,7 @@ export default function (pi: ExtensionAPI) {
 			// A goal continuation turn means a goal is still running in this session.
 			const content = (message as { content?: unknown }).content;
 			const text = typeof content === "string" ? content : JSON.stringify(content ?? "");
-			if (text.includes("pi_goal_continuation")) goalActive = true;
+			if (text.includes("pi_goal_continuation")) goalActive = nextGoalActive(goalActive, { type: "goal_continuation" });
 			return;
 		}
 		run.lastStopReason = message.stopReason;
@@ -204,20 +205,20 @@ export default function (pi: ExtensionAPI) {
 					notify("goal", { title: "Goal complete", body: reason, meta: [`goal ran ${formatDuration(seconds * 1000)}`], level: "info" }, ctx);
 				}
 				goalStartedAt = 0;
-				goalActive = false;
+				goalActive = nextGoalActive(goalActive, { type: "goal_status", status: "complete" });
 				return;
 			}
 			if (status === "blocked" || status === "paused") {
-				goalActive = false;
+				goalActive = nextGoalActive(goalActive, { type: "goal_status", status });
 				notify("goal", { title: `Goal ${status}`, body: reason, level: "warning" }, ctx);
 			} else if (status !== "") {
-				goalActive = true;
+				goalActive = nextGoalActive(goalActive, { type: "goal_status", status });
 			}
 			return;
 		}
 		if (event.toolName === "create_goal") {
 			goalStartedAt = Date.now();
-			goalActive = true;
+			goalActive = nextGoalActive(goalActive, { type: "goal_created" });
 			notify("goal", { title: "Goal started", body: "A new goal is running.", level: "info" }, ctx);
 		}
 	});
