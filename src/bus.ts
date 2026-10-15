@@ -17,7 +17,7 @@ export interface BusOptions {
 }
 
 /** Scenarios the user never triggers by hand. */
-const AUTOMATIC_SCOPES: NotifyScope[] = ["task_complete", "task_failed", "question", "goal", "tool_error", "ui_prompt", "reminder"];
+const AUTOMATIC_SCOPES: NotifyScope[] = ["task_start", "task_complete", "task_failed", "question", "goal", "tool_error", "ui_prompt", "reminder"];
 
 const LOG_CAP = 200;
 

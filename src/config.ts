@@ -29,6 +29,7 @@ export const PROJECT_CONFIG_FILE = "pi-notify.json";
 export const SCHEDULE_FILE = "pi-notify-schedule.json";
 
 export const ALL_SCOPES: NotifyScope[] = [
+	"task_start",
 	"task_complete",
 	"task_failed",
 	"question",
@@ -84,6 +85,7 @@ export function defaultConfig(agentDir: string): NotifyConfig {
 		auto: {
 			enabled: true,
 			scopes: {
+				task_start: false,
 				task_complete: true,
 				task_failed: true,
 				question: true,

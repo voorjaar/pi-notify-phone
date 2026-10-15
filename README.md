@@ -126,10 +126,11 @@ Invalid values are ignored and reported by `/notify status` instead of breaking 
 | `logEnabled` | `true` | Turn the send history off. |
 | `schedules` | `[]` | Predefined scheduled notifications, e.g. a daily standup ping. |
 
-Scenario scopes (`auto.scopes`), all default `true` except `tool_error`:
+Scenario scopes (`auto.scopes`), all default `true` except `tool_error` and `task_start`:
 
 | Scope | Fires on |
 | --- | --- |
+| `task_start` | A run started (the first message of the run). **Default off.** |
 | `task_complete` | A run finished and lasted at least `minRunSeconds` |
 | `task_failed` | A run ended with an API/model error |
 | `question` | `ask_user_question` is waiting for your answer |

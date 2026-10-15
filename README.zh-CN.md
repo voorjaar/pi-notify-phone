@@ -115,10 +115,11 @@ node scripts/send.ts "pi-notify-phone" "hello" info
 | `logEnabled` | `true` | 关掉发送历史。 |
 | `schedules` | `[]` | 预置的定时通知，例如每天一次的站会提醒。 |
 
-场景开关（`auto.scopes`），除 `tool_error` 外默认都是 `true`：
+场景开关（`auto.scopes`），除 `tool_error` 和 `task_start` 外默认都是 `true`：
 
 | 场景 | 触发时机 |
 | --- | --- |
+| `task_start` | 一次运行开始（取本次运行的第一条消息）。**默认关闭。** |
 | `task_complete` | 一次运行结束，且时长不少于 `minRunSeconds` |
 | `task_failed` | 一次运行以 API/模型错误结束 |
 | `question` | `ask_user_question` 正在等你回答 |

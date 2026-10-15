@@ -9,6 +9,7 @@ export type NotifyLevel = "info" | "warning" | "critical";
 
 /** Every notification scenario pi-notify knows about. */
 export type NotifyScope =
+	| "task_start"
 	| "task_complete"
 	| "task_failed"
 	| "question"

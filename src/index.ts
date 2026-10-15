@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 
 import { NotifyBus, decideRunEnd, readNotifyLog } from "./bus.ts";
 import { nextGoalActive } from "./goals.ts";
+import { taskStartBody } from "./announcements.ts";
 import { loadConfig, resolveAgentDir } from "./config.ts";
 import { decryptNtfyBody, isNtfyEnvelope } from "./crypto.ts";
 import { sendNotification } from "./providers.ts";
@@ -24,7 +25,7 @@ import type { FetchLike, NotifyConfig, NotifyLevel, NotifyRequest, NotifyScope, 
 const EXT_DIR = dirname(fileURLToPath(import.meta.url));
 const SKILL_PATH = join(EXT_DIR, "..", "skills", "notify", "SKILL.md");
 
-const SCOPES: NotifyScope[] = ["task_complete", "task_failed", "question", "goal", "tool_error", "ui_prompt", "reminder", "manual"];
+const SCOPES: NotifyScope[] = ["task_start", "task_complete", "task_failed", "question", "goal", "tool_error", "ui_prompt", "reminder", "manual"];
 
 const fetchImpl: FetchLike = async (url, init) => {
 	const response = await fetch(url, init);
@@ -47,6 +48,7 @@ export default function (pi: ExtensionAPI) {
 	let run: RunState = { startedAt: 0, turns: 0, toolErrors: 0 };
 	let goalStartedAt = 0;
 	let goalActive = false;
+	let taskStartAnnounced = false;
 
 	const bus: NotifyBus = new NotifyBus(config, {
 		transport: (req): Promise<SendResult> => sendNotification(req, bus.getConfig(), fetchImpl),
@@ -152,18 +154,24 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("agent_start", async () => {
 		run = { startedAt: Date.now(), turns: 0, toolErrors: 0 };
+		taskStartAnnounced = false;
 	});
 
 	pi.on("turn_start", async () => {
 		run.turns += 1;
 	});
 
-	pi.on("message_end", async (event) => {
+	pi.on("message_end", async (event, ctx) => {
 		const message = event.message;
 		if (message.role !== "assistant") {
-			// A goal continuation turn means a goal is still running in this session.
 			const content = (message as { content?: unknown }).content;
 			const text = typeof content === "string" ? content : JSON.stringify(content ?? "");
+			// The first user message of a run is what started it, so it is the best body for the notice.
+			if (message.role === "user" && !taskStartAnnounced) {
+				taskStartAnnounced = true;
+				notify("task_start", { title: "Task started", body: taskStartBody(text), level: "info" }, ctx);
+			}
+			// A goal continuation turn means a goal is still running in this session.
 			if (text.includes("pi_goal_continuation")) goalActive = nextGoalActive(goalActive, { type: "goal_continuation" });
 			return;
 		}

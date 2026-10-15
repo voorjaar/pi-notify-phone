@@ -8,6 +8,7 @@ import { defaultConfig, findProblems, loadConfig, mergeConfig, normalizeConfig, 
 import { ReminderScheduler, fileStore, makeId, memoryStore } from "../src/scheduler.ts";
 import { NotifyBus, composeRequest, decideRunEnd, readNotifyLog } from "../src/bus.ts";
 import { nextGoalActive } from "../src/goals.ts";
+import { taskStartBody } from "../src/announcements.ts";
 import { decryptBarkPayload, decryptNtfyBody, isNtfyEnvelope } from "../src/crypto.ts";
 import { buildBarkRequests, buildNtfyRequest, sendNotification } from "../src/providers.ts";
 import { formatDuration, formatRelative, parseDuration, parseWhen } from "../src/time.ts";
@@ -791,4 +792,41 @@ test("full lifecycle: goal start, run end, goal complete, final run end", () => 
 	assert.deepEqual(walk(plain), ["goal:started", "run:task_complete", "goal:complete", "run:task_complete"]);
 	// With the gate on the goal owns the session: only the goal events survive.
 	assert.deepEqual(walk(gated), ["goal:started", "goal:complete", "run:task_complete"]);
+});
+test("task_start defaults to off and can be switched on through a layer", () => {
+	assert.equal(baseConfig().auto.scopes.task_start, false, "a run-start push is opt-in");
+
+	const enabled = baseConfig({ auto: { scopes: { task_start: true } } });
+	assert.equal(enabled.auto.scopes.task_start, true);
+
+	const dir = scratchDir();
+	const fromEnv = loadConfig({ cwd: dir, agentDir: dir, env: { PI_NOTIFY_AUTO_SCOPES: "task_start" } }).config;
+	assert.equal(fromEnv.auto.scopes.task_start, true);
+	rmSync(dir, { recursive: true, force: true });
+});
+
+test("the bus gates task_start like any other automatic scope", async () => {
+	const clock = new FakeClock();
+	const off = new NotifyBus(baseConfig(), { transport: fakeSend(), now: () => clock.now() });
+	const blocked = await off.send({ scope: "task_start", body: "a run started" });
+	assert.equal(blocked.ok, false);
+	assert.match(blocked.detail ?? "", /scope task_start is off/);
+
+	const on = new NotifyBus(baseConfig({ auto: { scopes: { task_start: true } } }), { transport: fakeSend(), now: () => clock.now() });
+	const allowed = await on.send({ scope: "task_start", body: "a run started" });
+	assert.equal(allowed.ok, true);
+});
+
+test("task_start bodies quote the prompt and hide harness markers", () => {
+	assert.equal(taskStartBody("Refactor the auth module and add tests"), "Refactor the auth module and add tests");
+	assert.equal(taskStartBody("  multi\nline\n\nprompt  "), "multi line prompt");
+	assert.equal(taskStartBody(""), "A run started.");
+	assert.equal(
+		taskStartBody('<pi_goal_continuation goal_id="abc" kind="checkpoint" /> keep going'),
+		"A run started.",
+		"a continuation says nothing the user did not already know",
+	);
+	const long = taskStartBody("x".repeat(500));
+	assert.equal(long.length, 203, "truncated with an ellipsis at the snippet cap");
+	assert.ok(long.endsWith("..."));
 });
