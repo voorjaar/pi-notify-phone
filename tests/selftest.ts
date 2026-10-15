@@ -707,3 +707,24 @@ test("task and goal minimum durations default to zero and can be raised", () => 
 		rmSync(dir, { recursive: true, force: true });
 	}
 });
+
+test("task_complete suppression during a goal is opt-in", () => {
+	const dir = scratchDir();
+	try {
+		const base = defaultConfig("/tmp/agent-dir");
+		assert.equal(base.auto.suppressTaskCompleteDuringGoal, false);
+
+		mkdirSync(join(dir, "agent"), { recursive: true });
+		writeFileSync(join(dir, "agent", "pi-notify.json"), JSON.stringify({ auto: { suppressTaskCompleteDuringGoal: true } }));
+		const fromFile = loadConfig({ cwd: dir, agentDir: join(dir, "agent"), env: {} });
+		assert.equal(fromFile.config.auto.suppressTaskCompleteDuringGoal, true);
+
+		const fromEnv = loadConfig({ cwd: dir, agentDir: join(dir, "agent"), env: { PI_NOTIFY_GOAL_SUPPRESS_TASK_COMPLETE: "off" } });
+		assert.equal(fromEnv.config.auto.suppressTaskCompleteDuringGoal, false);
+
+		const junk = normalizeConfig(mergeConfig(base, { auto: { suppressTaskCompleteDuringGoal: "yes" } }));
+		assert.equal(junk.auto.suppressTaskCompleteDuringGoal, false);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});

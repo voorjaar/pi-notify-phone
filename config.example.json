@@ -46,6 +46,7 @@
     },
     "minRunSeconds": 0,
     "goalMinSeconds": 0,
+    "suppressTaskCompleteDuringGoal": false,
     "throttleSeconds": 15,
     "maxBodyChars": 900,
     "notifyAborted": false

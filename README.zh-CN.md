@@ -105,6 +105,7 @@ node scripts/send.ts "pi-notify" "hello" info
 | `auto.scopes` | 见下表 | 每个场景各自的开关。 |
 | `auto.minRunSeconds` | `0` | 触发“任务完成”通知所需的最短运行时长。`0` 表示每次完成都发；`180` 表示只有三分钟以上的任务才发。 |
 | `auto.goalMinSeconds` | `0` | “goal 完成”通知的同样门槛，从 goal 开始的那一刻算起。 |
+| `auto.suppressTaskCompleteDuringGoal` | `false` | goal 运行期间跳过每次运行的“任务完成”通知；goal 事件照发，运行失败也照发。 |
 | `auto.throttleSeconds` | `15` | 同一场景两次通知之间的最小间隔。 |
 | `auto.maxBodyChars` | `900` | 正文超过这个长度会被截断。 |
 | `auto.notifyAborted` | `false` | 运行被中止时是否通知。 |
@@ -129,7 +130,7 @@ node scripts/send.ts "pi-notify" "hello" info
 
 环境变量覆盖（优先级高于配置文件）：`PI_NOTIFY_PROVIDER`、`PI_NOTIFY_ENABLED`、
 `PI_NOTIFY_TITLE`、`PI_NOTIFY_AUTO_ENABLED`、`PI_NOTIFY_AUTO_SCOPES=question:on,goal:off`、
-`PI_NOTIFY_MIN_RUN_SECONDS`、`PI_NOTIFY_GOAL_MIN_SECONDS`、`PI_NOTIFY_THROTTLE_SECONDS`、`PI_NOTIFY_BARK_KEY`
+`PI_NOTIFY_MIN_RUN_SECONDS`、`PI_NOTIFY_GOAL_MIN_SECONDS`、`PI_NOTIFY_GOAL_SUPPRESS_TASK_COMPLETE`、`PI_NOTIFY_THROTTLE_SECONDS`、`PI_NOTIFY_BARK_KEY`
 （逗号分隔可写多台设备）、`PI_NOTIFY_BARK_BASE_URL`、`PI_NOTIFY_BARK_GROUP`、
 `PI_NOTIFY_BARK_SOUND`、`PI_NOTIFY_BARK_ICON`、`PI_NOTIFY_BARK_ENCRYPT`、
 `PI_NOTIFY_BARK_ENCRYPT_KEY`、`PI_NOTIFY_BARK_ENCRYPT_IV`、`PI_NOTIFY_BARK_ENCRYPT_ALGORITHM`、
@@ -155,6 +156,7 @@ node scripts/send.ts "pi-notify" "hello" info
 /notify on | off               总开关（本次会话）
 /notify auto on | off          自动场景通知
 /notify scope <name> on|off    单个场景开关
+/notify goalgate on|off        goal 运行期间是否抑制“任务完成”通知
 /notify provider bark|ntfy     切换通道（本次会话）
 /notify test                   发一条通知验证送达
 /notify send <text>            立刻发送

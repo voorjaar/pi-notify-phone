@@ -45,6 +45,7 @@ export default function (pi: ExtensionAPI) {
 	let scheduler: ReminderScheduler | undefined;
 	let run: RunState = { startedAt: 0, turns: 0, toolErrors: 0 };
 	let goalStartedAt = 0;
+	let goalActive = false;
 
 	const bus: NotifyBus = new NotifyBus(config, {
 		transport: (req): Promise<SendResult> => sendNotification(req, bus.getConfig(), fetchImpl),
@@ -133,6 +134,7 @@ export default function (pi: ExtensionAPI) {
 		armScheduler(ctx);
 		run = { startedAt: 0, turns: 0, toolErrors: 0 };
 		goalStartedAt = 0;
+		goalActive = false;
 		if (problems.fatal.length > 0) {
 			ctx.ui.notify(`pi-notify: ${problems.fatal.join(" · ")} - see /notify status`, "warning");
 		}
@@ -157,7 +159,13 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("message_end", async (event) => {
 		const message = event.message;
-		if (message.role !== "assistant") return;
+		if (message.role !== "assistant") {
+			// A goal continuation turn means a goal is still running in this session.
+			const content = (message as { content?: unknown }).content;
+			const text = typeof content === "string" ? content : JSON.stringify(content ?? "");
+			if (text.includes("pi_goal_continuation")) goalActive = true;
+			return;
+		}
 		run.lastStopReason = message.stopReason;
 		if (message.errorMessage) run.lastError = message.errorMessage;
 	});
@@ -196,15 +204,20 @@ export default function (pi: ExtensionAPI) {
 					notify("goal", { title: "Goal complete", body: reason, meta: [`goal ran ${formatDuration(seconds * 1000)}`], level: "info" }, ctx);
 				}
 				goalStartedAt = 0;
+				goalActive = false;
 				return;
 			}
 			if (status === "blocked" || status === "paused") {
+				goalActive = false;
 				notify("goal", { title: `Goal ${status}`, body: reason, level: "warning" }, ctx);
+			} else if (status !== "") {
+				goalActive = true;
 			}
 			return;
 		}
 		if (event.toolName === "create_goal") {
 			goalStartedAt = Date.now();
+			goalActive = true;
 			notify("goal", { title: "Goal started", body: "A new goal is running.", level: "info" }, ctx);
 		}
 	});
@@ -227,6 +240,9 @@ export default function (pi: ExtensionAPI) {
 			notify("task_failed", { title: "Task failed", body: run.lastError ?? "The run ended with an error.", meta: [`${run.turns} turns, ${formatDuration(seconds * 1000)}`, `tool errors: ${run.toolErrors}`], level: "warning" }, ctx);
 			return;
 		}
+
+		// While a goal is running, goal events are the signal; per-run "Task finished" is noise.
+		if (goalActive && config.auto.suppressTaskCompleteDuringGoal) return;
 
 		// Short runs are watched in the terminal; only long ones are worth a phone buzz.
 		if (seconds < config.auto.minRunSeconds) return;
@@ -355,7 +371,7 @@ export default function (pi: ExtensionAPI) {
 	// ---- command -------------------------------------------------------------
 
 	pi.registerCommand("notify", {
-		description: "Send, schedule, and control notifications (notify [on|off|status|test|send|schedule|list|cancel|clear|provider|scope|mute|log|decrypt])",
+		description: "Send, schedule, and control notifications (notify [on|off|status|test|send|schedule|list|cancel|clear|provider|scope|goalgate|mute|log|decrypt])",
 		getArgumentCompletions(argumentPrefix) {
 			const prefix = (argumentPrefix ?? "").toLowerCase();
 			const options = [
@@ -373,6 +389,7 @@ export default function (pi: ExtensionAPI) {
 				"provider bark",
 				"provider ntfy",
 				"scope <name> on|off",
+				"goalgate on|off",
 				"mute [minutes]",
 				"unmute",
 				"log [n]",
@@ -417,6 +434,21 @@ export default function (pi: ExtensionAPI) {
 				config.auto.scopes[scope] = state === "on";
 				bus.setConfig(config);
 				ctx.ui.notify(`scope ${scope} ${state}`, "info");
+				return;
+			}
+			if (sub === "goalgate") {
+				const state = (parts[1] ?? "").toLowerCase();
+				if (state !== "on" && state !== "off") {
+					ctx.ui.notify("usage: /notify goalgate on|off", "warning");
+					return;
+				}
+				config.auto.suppressTaskCompleteDuringGoal = state === "on";
+				bus.setConfig(config);
+				ctx.ui.notify(
+					`task_complete while a goal runs: ${state === "on" ? "suppressed" : "enabled"}. Edit pi-notify.json to make it permanent.`,
+					"info",
+				);
+				ctx.ui.setStatus("pi-notify", statusLine());
 				return;
 			}
 			if (sub === "provider") {
@@ -579,7 +611,7 @@ export default function (pi: ExtensionAPI) {
 		lines.push(
 			`encryption: ${config.provider === "bark" ? `${barkEnc.enabled ? `on (${barkEnc.algorithm})` : "off"}` : `${ntfyEnc.enabled ? "on (AES-256-GCM envelope)" : "off"}${config.ntfy.token || config.ntfy.user ? " · authenticated" : ""}`}`,
 		);
-		lines.push(`noise: minRun ${config.auto.minRunSeconds}s · goalMin ${config.auto.goalMinSeconds}s · throttle ${config.auto.throttleSeconds}s · body ${config.auto.maxBodyChars} chars`);
+		lines.push(`noise: minRun ${config.auto.minRunSeconds}s · goalMin ${config.auto.goalMinSeconds}s · goalgate ${config.auto.suppressTaskCompleteDuringGoal ? "on" : "off"} · throttle ${config.auto.throttleSeconds}s · body ${config.auto.maxBodyChars} chars`);
 		lines.push(`mute: ${bus.mutedUntil > Date.now() ? `automatic sends muted until ${formatWhen(bus.mutedUntil)}` : "off"}`);
 		lines.push(`reminders: ${reminders().length} pending · store ${config.scheduleFile} · history ${config.logEnabled ? config.logFile : "off"}`);
 		if (problems.fatal.length > 0) lines.push(`needs setup: ${problems.fatal.join(" · ")}`);
