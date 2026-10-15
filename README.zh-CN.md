@@ -129,6 +129,8 @@ node scripts/send.ts "pi-notify-phone" "hello" info
 | `reminder` | 定时提醒到点 |
 | `manual` | 你或助手明确要求的一次发送 |
 
+一次阻塞的 `ask_user_question` 会同时触发 `question` 和 `ui_prompt_start`。`question` 通知已经覆盖了这个提问，所以不会再推一条 `ui_prompt`。
+
 环境变量覆盖（优先级高于配置文件）：`PI_NOTIFY_PROVIDER`、`PI_NOTIFY_ENABLED`、
 `PI_NOTIFY_TITLE`、`PI_NOTIFY_AUTO_ENABLED`、`PI_NOTIFY_AUTO_SCOPES=question:on,goal:off`、
 `PI_NOTIFY_MIN_RUN_SECONDS`、`PI_NOTIFY_GOAL_MIN_SECONDS`、`PI_NOTIFY_SUPPRESS_TASK_NOTIFY`、`PI_NOTIFY_THROTTLE_SECONDS`、`PI_NOTIFY_BARK_KEY`

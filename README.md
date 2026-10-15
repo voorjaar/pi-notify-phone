@@ -140,6 +140,9 @@ Scenario scopes (`auto.scopes`), all default `true` except `tool_error` and `tas
 | `reminder` | A scheduled reminder is due |
 | `manual` | A send you or the agent asked for explicitly |
 
+One blocking `ask_user_question` arrives as both `question` and `ui_prompt_start`. The `question`
+notification covers the dialog, so no separate `ui_prompt` push follows it.
+
 Environment overrides (they win over the files): `PI_NOTIFY_PROVIDER`, `PI_NOTIFY_ENABLED`,
 `PI_NOTIFY_TITLE`, `PI_NOTIFY_AUTO_ENABLED`, `PI_NOTIFY_AUTO_SCOPES=question:on,goal:off`,
 `PI_NOTIFY_MIN_RUN_SECONDS`, `PI_NOTIFY_GOAL_MIN_SECONDS`, `PI_NOTIFY_SUPPRESS_TASK_NOTIFY`, `PI_NOTIFY_THROTTLE_SECONDS`, `PI_NOTIFY_BARK_KEY`
