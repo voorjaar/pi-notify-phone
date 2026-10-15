@@ -78,6 +78,7 @@ node scripts/send.ts "pi-notify" "hello" info
 | `bark.baseUrl` | `https://api.day.app` | 自建 Bark 服务器地址。 |
 | `bark.group` | `pi` | Bark 分组。 |
 | `bark.sound` | `glass` | Bark 提示音。 |
+| `bark.icon` | 未设置 | 通知图标 URL。不设就用 Bark 自己的图标。[`assets/pi-icon.png`](assets/pi-icon.png) 是一张方形 pi 图标，可以自己托管后把这个键指向它。 |
 | `bark.level` | `active` / `timeSensitive` / `critical` | 把我们的等级映射到 Bark 的打扰等级。 |
 | `bark.callOnCritical` | `true` | critical 时带 `call=1`，可以突破勿扰模式。 |
 | `bark.ttlSeconds` | `600` | `ttl`：设备离线超过这个时长就丢弃通知。 |

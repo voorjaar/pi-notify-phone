@@ -87,6 +87,7 @@ Invalid values are ignored and reported by `/notify status` instead of breaking 
 | `bark.baseUrl` | `https://api.day.app` | Self-hosted Bark server. |
 | `bark.group` | `pi` | Bark group. |
 | `bark.sound` | `glass` | Bark sound. |
+| `bark.icon` | unset | Notification icon URL. Unset keeps Bark's own icon. [`assets/pi-icon.png`](assets/pi-icon.png) is a square pi mark you can host anywhere and point this key at. |
 | `bark.level` | `active` / `timeSensitive` / `critical` | Maps our levels to Bark interruption levels. |
 | `bark.callOnCritical` | `true` | `call=1` on critical so it can break Do Not Disturb. |
 | `bark.ttlSeconds` | `600` | `ttl`: drop the notification if the device is offline this long. |
