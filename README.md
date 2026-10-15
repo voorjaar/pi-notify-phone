@@ -30,6 +30,12 @@ Pi finishes a long task  ->  pi-notify  ->  https://api.day.app/...  ->  your ph
 ## Install
 
 ```bash
+pi install git:github.com/voorjaar/pi-notify
+```
+
+Or from the LAN Gitea mirror:
+
+```bash
 pi install git:http://macminion.local:4096/voorjaar/pi-notify
 ```
 
