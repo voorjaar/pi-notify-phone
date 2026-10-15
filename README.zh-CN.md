@@ -1,4 +1,4 @@
-# pi-notify
+# pi-notify-phone
 
 [English](README.md) | **简体中文**
 
@@ -6,7 +6,7 @@
 支持两种通道：[Bark](https://bark.day.app/#/en-us/?id=bark) 和 [ntfy](https://docs.ntfy.sh/config/)。
 
 ```text
-Pi 跑完一个长任务  ->  pi-notify  ->  https://api.day.app/...  ->  手机震动
+Pi 跑完一个长任务  ->  pi-notify-phone  ->  https://api.day.app/...  ->  手机震动
 ```
 
 ## 功能
@@ -33,7 +33,7 @@ pi install git:github.com/voorjaar/pi-notify-phone
 或者让 Pi 直接指向本地目录：
 
 ```bash
-pi -e /path/to/pi-notify-phone/index.ts
+pi -e /path/to/pi-notify-phone/src/index.ts
 ```
 
 只装一个就行。npm 包和 git 源是同一份扩展，两份同时加载会被 Pi 以工具名冲突拒绝。
@@ -59,7 +59,7 @@ pi -e /path/to/pi-notify-phone/index.ts
 也可以不开 Pi 会话直接验证送达：
 
 ```bash
-node scripts/send.ts "pi-notify" "hello" info
+node scripts/send.ts "pi-notify-phone" "hello" info
 ```
 
 ## 配置

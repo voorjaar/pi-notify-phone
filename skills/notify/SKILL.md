@@ -3,7 +3,7 @@ name: notify
 description: Send the user a phone notification (Bark or ntfy) from Pi - task results, questions, reminders, and scheduled/recurring notifications.
 ---
 
-# pi-notify
+# pi-notify-phone
 
 The `notify` tool is how you reach the user's phone. When the user asks to be told something or
 reminded of something, **call `notify` right away**. Do not search the vault, do not look for cron

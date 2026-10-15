@@ -1,4 +1,4 @@
-# pi-notify
+# pi-notify-phone
 
 **English** | [简体中文](README.zh-CN.md)
 
@@ -8,7 +8,7 @@ Two transports are supported: [Bark](https://bark.day.app/#/en-us/?id=bark) and
 [ntfy](https://docs.ntfy.sh/config/).
 
 ```text
-Pi finishes a long task  ->  pi-notify  ->  https://api.day.app/...  ->  your phone buzzes
+Pi finishes a long task  ->  pi-notify-phone  ->  https://api.day.app/...  ->  your phone buzzes
 ```
 
 ## Features
@@ -43,7 +43,7 @@ pi install git:github.com/voorjaar/pi-notify-phone
 Or point Pi at a local checkout:
 
 ```bash
-pi -e /path/to/pi-notify-phone/index.ts
+pi -e /path/to/pi-notify-phone/src/index.ts
 ```
 
 Install it once. The npm package and the git source are the same extension; loading both makes Pi
@@ -70,7 +70,7 @@ Copy [`config.example.json`](config.example.json) for the full set of options. T
 You can also verify delivery without a Pi session:
 
 ```bash
-node scripts/send.ts "pi-notify" "hello" info
+node scripts/send.ts "pi-notify-phone" "hello" info
 ```
 
 ## Configuration
