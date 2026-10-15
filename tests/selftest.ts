@@ -6,7 +6,7 @@ import { test } from "node:test";
 
 import { defaultConfig, findProblems, loadConfig, mergeConfig, normalizeConfig, resolveAgentDir } from "../src/config.ts";
 import { ReminderScheduler, fileStore, makeId, memoryStore } from "../src/scheduler.ts";
-import { NotifyBus, composeRequest, decideRunEnd, readNotifyLog } from "../src/bus.ts";
+import { NotifyBus, QuestionUiDedupe, composeRequest, decideRunEnd, readNotifyLog } from "../src/bus.ts";
 import { nextGoalActive } from "../src/goals.ts";
 import { taskStartBody } from "../src/announcements.ts";
 import { decryptBarkPayload, decryptNtfyBody, isNtfyEnvelope } from "../src/crypto.ts";

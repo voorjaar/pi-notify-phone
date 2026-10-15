@@ -101,6 +101,29 @@ export function decideRunEnd(facts: RunEndFacts, auto: AutoConfig): { scope: "ta
 	return { scope: "task_complete", reason: `finished after ${facts.seconds}s` };
 }
 
+/**
+ * One blocking `ask_user_question` reaches the extension twice: the `tool_call` (notified as
+ * `question`) and `ui_prompt_start` for the same dialog. `question` is the specific signal, so it wins
+ * and the generic `ui_prompt` is dropped. The mark is consumed by the first dialog it covers, so a
+ * question cannot silence an unrelated dialog that opens moments later.
+ */
+export class QuestionUiDedupe {
+	static readonly windowMs = 5000;
+	private questionAt = 0;
+
+	noteQuestion(now: number): void {
+		this.questionAt = now;
+	}
+
+	/** True when this `ui_prompt_start` is the dialog a `question` notification already covered. */
+	shouldSkipUiPrompt(now: number): boolean {
+		if (this.questionAt === 0) return false;
+		const questionAt = this.questionAt;
+		this.questionAt = 0;
+		return now - questionAt <= QuestionUiDedupe.windowMs;
+	}
+}
+
 export class NotifyBus {
 	private config: NotifyConfig;
 	private readonly transport: (req: NotifyRequest) => Promise<SendResult>;

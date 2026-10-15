@@ -12,7 +12,7 @@ import { basename } from "node:path";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { NotifyBus, decideRunEnd, readNotifyLog } from "./bus.ts";
+import { NotifyBus, QuestionUiDedupe, decideRunEnd, readNotifyLog } from "./bus.ts";
 import { nextGoalActive } from "./goals.ts";
 import { taskStartBody } from "./announcements.ts";
 import { loadConfig, resolveAgentDir } from "./config.ts";
@@ -49,6 +49,7 @@ export default function (pi: ExtensionAPI) {
 	let goalStartedAt = 0;
 	let goalActive = false;
 	let taskStartAnnounced = false;
+	const questionDedupe = new QuestionUiDedupe();
 
 	const bus: NotifyBus = new NotifyBus(config, {
 		transport: (req): Promise<SendResult> => sendNotification(req, bus.getConfig(), fetchImpl),
@@ -191,6 +192,8 @@ export default function (pi: ExtensionAPI) {
 			const questions = Array.isArray(event.input?.questions) ? event.input.questions : [];
 			const first = questions[0] as { question?: string } | undefined;
 			const count = questions.length;
+			// The same dialog also arrives as ui_prompt_start; question wins (see QuestionUiDedupe).
+			questionDedupe.noteQuestion(Date.now());
 			notify(
 				"question",
 				{
@@ -232,6 +235,11 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("ui_prompt_start", async (event, ctx) => {
+		if (questionDedupe.shouldSkipUiPrompt(Date.now())) {
+			// A question notification already covered this dialog; log the suppression for debugging.
+			void bus.send({ scope: "ui_prompt", title: "Waiting for input", body: event.title ?? "", level: "warning" }, { logOnly: true });
+			return;
+		}
 		notify("ui_prompt", { title: "Waiting for input", body: event.title ? `${event.kind}: ${event.title}` : `Pi is waiting for ${event.kind} input.`, level: "warning" }, ctx);
 	});
 
