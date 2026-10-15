@@ -608,7 +608,7 @@ export default function (pi: ExtensionAPI) {
 		lines.push(
 			`encryption: ${config.provider === "bark" ? `${barkEnc.enabled ? `on (${barkEnc.algorithm})` : "off"}` : `${ntfyEnc.enabled ? "on (AES-256-GCM envelope)" : "off"}${config.ntfy.token || config.ntfy.user ? " · authenticated" : ""}`}`,
 		);
-		lines.push(`noise: minRun ${config.auto.minRunSeconds}s · goalMin ${config.auto.goalMinSeconds}s · tasknotify ${config.auto.suppressTaskNotify ? "on" : "off"} · throttle ${config.auto.throttleSeconds}s · body ${config.auto.maxBodyChars} chars`);
+		lines.push(`noise: minRun ${config.auto.minRunSeconds}s · goalMin ${config.auto.goalMinSeconds}s · tasknotify ${config.auto.suppressTaskNotify ? "on" : "off"} (goal ${goalActive ? "running" : "idle"}) · throttle ${config.auto.throttleSeconds}s · body ${config.auto.maxBodyChars} chars`);
 		lines.push(`mute: ${bus.mutedUntil > Date.now() ? `automatic sends muted until ${formatWhen(bus.mutedUntil)}` : "off"}`);
 		lines.push(`reminders: ${reminders().length} pending · store ${config.scheduleFile} · history ${config.logEnabled ? config.logFile : "off"}`);
 		if (problems.fatal.length > 0) lines.push(`needs setup: ${problems.fatal.join(" · ")}`);
