@@ -95,7 +95,7 @@ export function defaultConfig(agentDir: string): NotifyConfig {
 			},
 			minRunSeconds: 0,
 			goalMinSeconds: 0,
-			suppressTaskCompleteDuringGoal: false,
+			suppressTaskNotify: false,
 			throttleSeconds: 15,
 			maxBodyChars: 900,
 			notifyAborted: false,
@@ -247,8 +247,8 @@ function envLayerPatch(env: Record<string, string | undefined>): Record<string, 
 	if (minRun !== undefined) auto.minRunSeconds = minRun;
 	const goalMin = numFromEnv(env.PI_NOTIFY_GOAL_MIN_SECONDS);
 	if (goalMin !== undefined) auto.goalMinSeconds = goalMin;
-	const goalGate = boolFromEnv(env.PI_NOTIFY_GOAL_SUPPRESS_TASK_COMPLETE);
-	if (goalGate !== undefined) auto.suppressTaskCompleteDuringGoal = goalGate;
+	const goalGate = boolFromEnv(env.PI_NOTIFY_SUPPRESS_TASK_NOTIFY);
+	if (goalGate !== undefined) auto.suppressTaskNotify = goalGate;
 	const throttle = numFromEnv(env.PI_NOTIFY_THROTTLE_SECONDS);
 	if (throttle !== undefined) auto.throttleSeconds = throttle;
 	if (Object.keys(auto).length > 0) patch.auto = auto;
@@ -265,7 +265,7 @@ export function normalizeConfig(config: NotifyConfig): NotifyConfig {
 	out.titlePrefix = typeof out.titlePrefix === "string" && out.titlePrefix.trim() !== "" ? out.titlePrefix : "Pi";
 	out.auto.minRunSeconds = Number.isFinite(out.auto.minRunSeconds) ? Math.max(0, out.auto.minRunSeconds) : 0;
 	out.auto.goalMinSeconds = Number.isFinite(out.auto.goalMinSeconds) ? Math.max(0, out.auto.goalMinSeconds) : 0;
-	out.auto.suppressTaskCompleteDuringGoal = out.auto.suppressTaskCompleteDuringGoal === true;
+	out.auto.suppressTaskNotify = out.auto.suppressTaskNotify === true;
 	out.auto.throttleSeconds = Number.isFinite(out.auto.throttleSeconds) ? Math.max(0, out.auto.throttleSeconds) : 15;
 	out.auto.maxBodyChars = positiveNumber(out.auto.maxBodyChars, 900);
 	out.barkEncryptionDefaultAlgorithm = BARK_ALGORITHMS.includes(out.barkEncryptionDefaultAlgorithm)

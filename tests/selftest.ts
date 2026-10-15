@@ -6,7 +6,7 @@ import { test } from "node:test";
 
 import { defaultConfig, findProblems, loadConfig, mergeConfig, normalizeConfig, resolveAgentDir } from "../src/config.ts";
 import { ReminderScheduler, fileStore, makeId, memoryStore } from "../src/scheduler.ts";
-import { NotifyBus, composeRequest, readNotifyLog } from "../src/bus.ts";
+import { NotifyBus, composeRequest, decideRunEnd, readNotifyLog } from "../src/bus.ts";
 import { decryptBarkPayload, decryptNtfyBody, isNtfyEnvelope } from "../src/crypto.ts";
 import { buildBarkRequests, buildNtfyRequest, sendNotification } from "../src/providers.ts";
 import { formatDuration, formatRelative, parseDuration, parseWhen } from "../src/time.ts";
@@ -712,19 +712,33 @@ test("task_complete suppression during a goal is opt-in", () => {
 	const dir = scratchDir();
 	try {
 		const base = defaultConfig("/tmp/agent-dir");
-		assert.equal(base.auto.suppressTaskCompleteDuringGoal, false);
+		assert.equal(base.auto.suppressTaskNotify, false);
 
 		mkdirSync(join(dir, "agent"), { recursive: true });
-		writeFileSync(join(dir, "agent", "pi-notify.json"), JSON.stringify({ auto: { suppressTaskCompleteDuringGoal: true } }));
+		writeFileSync(join(dir, "agent", "pi-notify.json"), JSON.stringify({ auto: { suppressTaskNotify: true } }));
 		const fromFile = loadConfig({ cwd: dir, agentDir: join(dir, "agent"), env: {} });
-		assert.equal(fromFile.config.auto.suppressTaskCompleteDuringGoal, true);
+		assert.equal(fromFile.config.auto.suppressTaskNotify, true);
 
-		const fromEnv = loadConfig({ cwd: dir, agentDir: join(dir, "agent"), env: { PI_NOTIFY_GOAL_SUPPRESS_TASK_COMPLETE: "off" } });
-		assert.equal(fromEnv.config.auto.suppressTaskCompleteDuringGoal, false);
+		const fromEnv = loadConfig({ cwd: dir, agentDir: join(dir, "agent"), env: { PI_NOTIFY_SUPPRESS_TASK_NOTIFY: "off" } });
+		assert.equal(fromEnv.config.auto.suppressTaskNotify, false);
 
-		const junk = normalizeConfig(mergeConfig(base, { auto: { suppressTaskCompleteDuringGoal: "yes" } }));
-		assert.equal(junk.auto.suppressTaskCompleteDuringGoal, false);
+		const junk = normalizeConfig(mergeConfig(base, { auto: { suppressTaskNotify: "yes" } }));
+		assert.equal(junk.auto.suppressTaskNotify, false);
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}
+});
+
+test("run-end decisions honor the goal gate", () => {
+	const auto = defaultConfig("/tmp/agent-dir").auto;
+	const gated = { ...auto, suppressTaskNotify: true };
+
+	assert.equal(decideRunEnd({ goalActive: true, aborted: false, failed: false, seconds: 300 }, gated), undefined);
+	assert.equal(decideRunEnd({ goalActive: true, aborted: false, failed: true, seconds: 300 }, gated), undefined);
+	assert.equal(decideRunEnd({ goalActive: true, aborted: true, failed: false, seconds: 5 }, gated), undefined);
+
+	assert.equal(decideRunEnd({ goalActive: true, aborted: false, failed: false, seconds: 300 }, auto)?.scope, "task_complete");
+	assert.equal(decideRunEnd({ goalActive: true, aborted: false, failed: true, seconds: 1 }, auto)?.scope, "task_failed");
+	assert.equal(decideRunEnd({ goalActive: false, aborted: false, failed: false, seconds: 3 }, { ...auto, minRunSeconds: 20 }), undefined);
+	assert.equal(decideRunEnd({ goalActive: false, aborted: true, failed: false, seconds: 3 }, { ...auto, notifyAborted: false }), undefined);
 });

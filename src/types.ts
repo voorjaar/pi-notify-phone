@@ -125,8 +125,8 @@ export interface AutoConfig {
 	minRunSeconds: number;
 	/** Skip goal-complete for goals shorter than this. 0 sends every goal completion. */
 	goalMinSeconds: number;
-	/** Suppress task_complete while a goal is running; goal events report progress instead. */
-	suppressTaskCompleteDuringGoal: boolean;
+	/** While a goal is running, suppress run-end notifications (aborted, failed, complete); goal events report progress. */
+	suppressTaskNotify: boolean;
 	/** Minimum gap between two automatic notifications from the same scenario. */
 	throttleSeconds: number;
 	/** Bodies longer than this are truncated for the transport. */

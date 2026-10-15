@@ -6,7 +6,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 
-import type { NotifyConfig, NotifyLevel, NotifyLogEntry, NotifyRequest, NotifyScope, SendResult } from "./types.ts";
+import type { AutoConfig, NotifyConfig, NotifyLevel, NotifyLogEntry, NotifyRequest, NotifyScope, SendResult } from "./types.ts";
 
 export interface BusOptions {
 	transport: (req: NotifyRequest) => Promise<SendResult>;
@@ -75,6 +75,30 @@ export function composeRequest(input: ComposedRequest, config: NotifyConfig, ses
 export interface GateDecision {
 	allow: boolean;
 	reason?: string;
+}
+
+export interface RunEndFacts {
+	/** A goal is running in this session. */
+	goalActive: boolean;
+	/** The run was aborted with Escape. */
+	aborted: boolean;
+	/** The assistant run ended with an error. */
+	failed: boolean;
+	/** Seconds between agent_start and settling. */
+	seconds: number;
+}
+
+/**
+ * Decide what a settled run notifies: nothing, a failure, or a completion.
+ * While a goal runs, auto.suppressTaskNotify silences all run-end notifications
+ * (aborted, failed, and complete) because goal events already report progress.
+ */
+export function decideRunEnd(facts: RunEndFacts, auto: AutoConfig): { scope: "task_complete" | "task_failed"; reason: string } | undefined {
+	if (facts.goalActive && auto.suppressTaskNotify) return undefined;
+	if (facts.aborted) return auto.notifyAborted ? { scope: "task_failed", reason: "run aborted" } : undefined;
+	if (facts.failed) return { scope: "task_failed", reason: "run ended with an error" };
+	if (facts.seconds < auto.minRunSeconds) return undefined;
+	return { scope: "task_complete", reason: `finished after ${facts.seconds}s` };
 }
 
 export class NotifyBus {

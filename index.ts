@@ -12,7 +12,7 @@ import { basename } from "node:path";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { NotifyBus, readNotifyLog } from "./src/bus.ts";
+import { NotifyBus, decideRunEnd, readNotifyLog } from "./src/bus.ts";
 import { loadConfig, resolveAgentDir } from "./src/config.ts";
 import { decryptNtfyBody, isNtfyEnvelope } from "./src/crypto.ts";
 import { sendNotification } from "./src/providers.ts";
@@ -231,21 +231,18 @@ export default function (pi: ExtensionAPI) {
 		const seconds = Math.round((Date.now() - startedAt) / 1000);
 		const failed = Boolean(run.lastError) || run.lastStopReason === "error";
 
-		if (event.aborted) {
-			if (config.auto.notifyAborted) notify("task_failed", { title: "Run aborted", body: `The run was aborted after ${formatDuration(seconds * 1000)}.`, level: "warning" }, ctx);
-			return;
-		}
+		const decision = decideRunEnd({ goalActive, aborted: event.aborted, failed, seconds }, config.auto);
+		if (!decision) return;
 
-		if (failed) {
+		if (decision.scope === "task_failed") {
+			if (event.aborted) {
+				notify("task_failed", { title: "Run aborted", body: `The run was aborted after ${formatDuration(seconds * 1000)}.`, level: "warning" }, ctx);
+				return;
+			}
 			notify("task_failed", { title: "Task failed", body: run.lastError ?? "The run ended with an error.", meta: [`${run.turns} turns, ${formatDuration(seconds * 1000)}`, `tool errors: ${run.toolErrors}`], level: "warning" }, ctx);
 			return;
 		}
 
-		// While a goal is running, goal events are the signal; per-run "Task finished" is noise.
-		if (goalActive && config.auto.suppressTaskCompleteDuringGoal) return;
-
-		// Short runs are watched in the terminal; only long ones are worth a phone buzz.
-		if (seconds < config.auto.minRunSeconds) return;
 		notify(
 			"task_complete",
 			{
@@ -371,7 +368,7 @@ export default function (pi: ExtensionAPI) {
 	// ---- command -------------------------------------------------------------
 
 	pi.registerCommand("notify", {
-		description: "Send, schedule, and control notifications (notify [on|off|status|test|send|schedule|list|cancel|clear|provider|scope|goalgate|mute|log|decrypt])",
+		description: "Send, schedule, and control notifications (notify [on|off|status|test|send|schedule|list|cancel|clear|provider|scope|tasknotify|mute|log|decrypt])",
 		getArgumentCompletions(argumentPrefix) {
 			const prefix = (argumentPrefix ?? "").toLowerCase();
 			const options = [
@@ -389,7 +386,7 @@ export default function (pi: ExtensionAPI) {
 				"provider bark",
 				"provider ntfy",
 				"scope <name> on|off",
-				"goalgate on|off",
+				"tasknotify on|off",
 				"mute [minutes]",
 				"unmute",
 				"log [n]",
@@ -436,16 +433,16 @@ export default function (pi: ExtensionAPI) {
 				ctx.ui.notify(`scope ${scope} ${state}`, "info");
 				return;
 			}
-			if (sub === "goalgate") {
+			if (sub === "tasknotify") {
 				const state = (parts[1] ?? "").toLowerCase();
 				if (state !== "on" && state !== "off") {
-					ctx.ui.notify("usage: /notify goalgate on|off", "warning");
+					ctx.ui.notify("usage: /notify tasknotify on|off", "warning");
 					return;
 				}
-				config.auto.suppressTaskCompleteDuringGoal = state === "on";
+				config.auto.suppressTaskNotify = state === "on";
 				bus.setConfig(config);
 				ctx.ui.notify(
-					`task_complete while a goal runs: ${state === "on" ? "suppressed" : "enabled"}. Edit pi-notify.json to make it permanent.`,
+					`run-end notifications while a goal runs: ${state === "on" ? "suppressed" : "enabled"}. Edit pi-notify.json to make it permanent.`,
 					"info",
 				);
 				ctx.ui.setStatus("pi-notify", statusLine());
@@ -611,7 +608,7 @@ export default function (pi: ExtensionAPI) {
 		lines.push(
 			`encryption: ${config.provider === "bark" ? `${barkEnc.enabled ? `on (${barkEnc.algorithm})` : "off"}` : `${ntfyEnc.enabled ? "on (AES-256-GCM envelope)" : "off"}${config.ntfy.token || config.ntfy.user ? " · authenticated" : ""}`}`,
 		);
-		lines.push(`noise: minRun ${config.auto.minRunSeconds}s · goalMin ${config.auto.goalMinSeconds}s · goalgate ${config.auto.suppressTaskCompleteDuringGoal ? "on" : "off"} · throttle ${config.auto.throttleSeconds}s · body ${config.auto.maxBodyChars} chars`);
+		lines.push(`noise: minRun ${config.auto.minRunSeconds}s · goalMin ${config.auto.goalMinSeconds}s · tasknotify ${config.auto.suppressTaskNotify ? "on" : "off"} · throttle ${config.auto.throttleSeconds}s · body ${config.auto.maxBodyChars} chars`);
 		lines.push(`mute: ${bus.mutedUntil > Date.now() ? `automatic sends muted until ${formatWhen(bus.mutedUntil)}` : "off"}`);
 		lines.push(`reminders: ${reminders().length} pending · store ${config.scheduleFile} · history ${config.logEnabled ? config.logFile : "off"}`);
 		if (problems.fatal.length > 0) lines.push(`needs setup: ${problems.fatal.join(" · ")}`);

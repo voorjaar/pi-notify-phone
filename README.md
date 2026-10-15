@@ -25,7 +25,8 @@ Pi finishes a long task  ->  pi-notify  ->  https://api.day.app/...  ->  your ph
 - **Reminders and scheduled notifications**: relative (`in 20m`), absolute (`at 08:30`,
   `tomorrow 09:00`), and recurring (`every 1d`), persisted so a restart still delivers them.
 - **Noise control**: minimum run duration, per-scope throttling, duplicate suppression,
-  body length caps, TTL so stale notifications are dropped.
+  body length caps, TTL so stale notifications are dropped, and a switch that silences task
+  notifications while a goal is running.
 
 ## Install
 
@@ -115,7 +116,7 @@ Invalid values are ignored and reported by `/notify status` instead of breaking 
 | `auto.scopes` | see below | Per-scenario switches. |
 | `auto.minRunSeconds` | `0` | Minimum length of a run before a task-complete notification is sent. `0` sends for every finished run; `180` sends only for runs of three minutes or more. |
 | `auto.goalMinSeconds` | `0` | Same gate for goal-complete notifications, measured from the moment the goal started. |
-| `auto.suppressTaskCompleteDuringGoal` | `false` | While a goal is running, skip the per-run task-complete notification. Goal events still fire, and a failed run still notifies. |
+| `auto.suppressTaskNotify` | `false` | While a goal is running, skip run-end notifications (task complete, task failed, aborted). Goal events still fire. |
 | `auto.throttleSeconds` | `15` | Minimum gap between notifications per scope. |
 | `auto.maxBodyChars` | `900` | Bodies longer than this are truncated. |
 | `auto.notifyAborted` | `false` | Notify when a run is aborted. |
@@ -140,7 +141,7 @@ Scenario scopes (`auto.scopes`), all default `true` except `tool_error`:
 
 Environment overrides (they win over the files): `PI_NOTIFY_PROVIDER`, `PI_NOTIFY_ENABLED`,
 `PI_NOTIFY_TITLE`, `PI_NOTIFY_AUTO_ENABLED`, `PI_NOTIFY_AUTO_SCOPES=question:on,goal:off`,
-`PI_NOTIFY_MIN_RUN_SECONDS`, `PI_NOTIFY_GOAL_MIN_SECONDS`, `PI_NOTIFY_GOAL_SUPPRESS_TASK_COMPLETE`, `PI_NOTIFY_THROTTLE_SECONDS`, `PI_NOTIFY_BARK_KEY`
+`PI_NOTIFY_MIN_RUN_SECONDS`, `PI_NOTIFY_GOAL_MIN_SECONDS`, `PI_NOTIFY_SUPPRESS_TASK_NOTIFY`, `PI_NOTIFY_THROTTLE_SECONDS`, `PI_NOTIFY_BARK_KEY`
 (comma-separated for several devices), `PI_NOTIFY_BARK_BASE_URL`, `PI_NOTIFY_BARK_GROUP`,
 `PI_NOTIFY_BARK_SOUND`, `PI_NOTIFY_BARK_ICON`, `PI_NOTIFY_BARK_ENCRYPT`,
 `PI_NOTIFY_BARK_ENCRYPT_KEY`, `PI_NOTIFY_BARK_ENCRYPT_IV`, `PI_NOTIFY_BARK_ENCRYPT_ALGORITHM`,
@@ -167,7 +168,7 @@ so it can tell you whether a notification is actually on its way.
 /notify on | off               master switch (this session)
 /notify auto on | off          automatic scenario notifications
 /notify scope <name> on|off    one scenario
-/notify goalgate on|off        suppress task-complete while a goal is running
+/notify tasknotify on|off        suppress task notifications while a goal is running
 /notify provider bark|ntfy     transport (this session)
 /notify test                   send one notification to check delivery
 /notify send <text>            send now
