@@ -30,6 +30,12 @@ Pi finishes a long task  ->  pi-notify  ->  https://api.day.app/...  ->  your ph
 ## Install
 
 ```bash
+pi install npm:pi-notify-phone
+```
+
+Or straight from the repository:
+
+```bash
 pi install git:github.com/voorjaar/pi-notify
 ```
 
@@ -44,6 +50,9 @@ Or point Pi at a local checkout:
 ```bash
 pi -e /path/to/pi-notify/index.ts
 ```
+
+Install it once. The npm package and the git source are the same extension; loading both makes Pi
+reject the duplicate tool names.
 
 ## Setup
 

@@ -21,6 +21,12 @@ Pi 跑完一个长任务  ->  pi-notify  ->  https://api.day.app/...  ->  手机
 ## 安装
 
 ```bash
+pi install npm:pi-notify-phone
+```
+
+也可以直接从仓库安装：
+
+```bash
 pi install git:github.com/voorjaar/pi-notify
 ```
 
@@ -35,6 +41,8 @@ pi install git:http://macminion.local:4096/voorjaar/pi-notify
 ```bash
 pi -e /path/to/pi-notify/index.ts
 ```
+
+只装一个就行。npm 包和 git 源是同一份扩展，两份同时加载会被 Pi 以工具名冲突拒绝。
 
 ## 开始使用
 
