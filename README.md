@@ -36,19 +36,13 @@ pi install npm:pi-notify-phone
 Or straight from the repository:
 
 ```bash
-pi install git:github.com/voorjaar/pi-notify
-```
-
-Or from the LAN Gitea mirror:
-
-```bash
-pi install git:http://macminion.local:4096/voorjaar/pi-notify
+pi install git:github.com/voorjaar/pi-notify-phone
 ```
 
 Or point Pi at a local checkout:
 
 ```bash
-pi -e /path/to/pi-notify/index.ts
+pi -e /path/to/pi-notify-phone/index.ts
 ```
 
 Install it once. The npm package and the git source are the same extension; loading both makes Pi
@@ -226,4 +220,4 @@ real notifications.
 
 MIT. See [LICENSE](LICENSE).
 
-Source, issues, and releases: [github.com/voorjaar/pi-notify](https://github.com/voorjaar/pi-notify).
+Source, issues, and releases: [github.com/voorjaar/pi-notify-phone](https://github.com/voorjaar/pi-notify-phone).

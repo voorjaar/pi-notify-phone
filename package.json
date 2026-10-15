@@ -11,12 +11,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/voorjaar/pi-notify.git"
+    "url": "git+https://github.com/voorjaar/pi-notify-phone.git"
   },
   "bugs": {
-    "url": "https://github.com/voorjaar/pi-notify/issues"
+    "url": "https://github.com/voorjaar/pi-notify-phone/issues"
   },
-  "homepage": "https://github.com/voorjaar/pi-notify#readme",
+  "homepage": "https://github.com/voorjaar/pi-notify-phone#readme",
   "keywords": [
     "pi-package",
     "pi-extension",

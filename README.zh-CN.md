@@ -27,19 +27,13 @@ pi install npm:pi-notify-phone
 也可以直接从仓库安装：
 
 ```bash
-pi install git:github.com/voorjaar/pi-notify
-```
-
-或者从局域网的 Gitea 镜像安装：
-
-```bash
-pi install git:http://macminion.local:4096/voorjaar/pi-notify
+pi install git:github.com/voorjaar/pi-notify-phone
 ```
 
 或者让 Pi 直接指向本地目录：
 
 ```bash
-pi -e /path/to/pi-notify/index.ts
+pi -e /path/to/pi-notify-phone/index.ts
 ```
 
 只装一个就行。npm 包和 git 源是同一份扩展，两份同时加载会被 Pi 以工具名冲突拒绝。
@@ -208,4 +202,4 @@ node --test tests/selftest.ts
 
 MIT，见 [LICENSE](LICENSE)。
 
-源码、issue 与 release 都在 [github.com/voorjaar/pi-notify](https://github.com/voorjaar/pi-notify)。
+源码、issue 与 release 都在 [github.com/voorjaar/pi-notify-phone](https://github.com/voorjaar/pi-notify-phone)。
