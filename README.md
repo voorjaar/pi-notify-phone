@@ -212,3 +212,9 @@ real notifications.
   recurring reminders are scheduled by the extension itself.
 - The extension does not read your phone, so it cannot tell you whether a notification was
   actually delivered.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
+
+Source, issues, and releases: [github.com/voorjaar/pi-notify](https://github.com/voorjaar/pi-notify).

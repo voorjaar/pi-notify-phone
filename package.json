@@ -4,6 +4,19 @@
   "description": "Send phone/desktop notifications from Pi through Bark or ntfy: task done/failed, questions, goal events, reminders and schedules",
   "type": "module",
   "license": "MIT",
+  "author": {
+    "name": "voorjaar",
+    "email": "felitas@zoho.com",
+    "url": "https://github.com/voorjaar"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/voorjaar/pi-notify.git"
+  },
+  "bugs": {
+    "url": "https://github.com/voorjaar/pi-notify/issues"
+  },
+  "homepage": "https://github.com/voorjaar/pi-notify#readme",
   "keywords": [
     "pi-package",
     "pi-extension",
@@ -33,6 +46,7 @@
     "src/",
     "scripts/",
     "skills/",
+    "LICENSE",
     "README.md",
     "README.zh-CN.md",
     "config.example.json"

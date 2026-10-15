@@ -195,3 +195,9 @@ node --test tests/selftest.ts
   （超过 `maxLateMs` 太旧则直接丢弃）。
 - 关闭加密时，单次提醒会使用 ntfy 的服务端定时（`Send At`）；周期性提醒由扩展自己调度。
 - 扩展读不到你的手机，所以无法确认通知是否真的送达。
+
+## 许可
+
+MIT，见 [LICENSE](LICENSE)。
+
+源码、issue 与 release 都在 [github.com/voorjaar/pi-notify](https://github.com/voorjaar/pi-notify)。
