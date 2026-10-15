@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { defaultConfig, findProblems, loadConfig, mergeConfig, normalizeConfig, resolveAgentDir } from "../src/config.ts";
 import { ReminderScheduler, fileStore, makeId, memoryStore } from "../src/scheduler.ts";
 import { NotifyBus, composeRequest, decideRunEnd, readNotifyLog } from "../src/bus.ts";
+import { nextGoalActive } from "../src/goals.ts";
 import { decryptBarkPayload, decryptNtfyBody, isNtfyEnvelope } from "../src/crypto.ts";
 import { buildBarkRequests, buildNtfyRequest, sendNotification } from "../src/providers.ts";
 import { formatDuration, formatRelative, parseDuration, parseWhen } from "../src/time.ts";
@@ -741,4 +742,53 @@ test("run-end decisions honor the goal gate", () => {
 	assert.equal(decideRunEnd({ goalActive: true, aborted: false, failed: true, seconds: 1 }, auto)?.scope, "task_failed");
 	assert.equal(decideRunEnd({ goalActive: false, aborted: false, failed: false, seconds: 3 }, { ...auto, minRunSeconds: 20 }), undefined);
 	assert.equal(decideRunEnd({ goalActive: false, aborted: true, failed: false, seconds: 3 }, { ...auto, notifyAborted: false }), undefined);
+});
+
+test("goal state machine: create, status, continuation, session start", () => {
+	let active = nextGoalActive(false, { type: "session_start" });
+	assert.equal(active, false);
+	active = nextGoalActive(active, { type: "goal_created" });
+	assert.equal(active, true);
+	active = nextGoalActive(active, { type: "goal_status", status: "active" });
+	assert.equal(active, true);
+	active = nextGoalActive(active, { type: "goal_status", status: "" });
+	assert.equal(active, true, "an empty status keeps what is already known");
+	active = nextGoalActive(active, { type: "goal_status", status: "paused" });
+	assert.equal(active, false);
+	active = nextGoalActive(active, { type: "goal_continuation" });
+	assert.equal(active, true, "a continuation turn means the goal is still running");
+	active = nextGoalActive(active, { type: "session_start" });
+	assert.equal(active, false, "a new session starts with no goal");
+});
+
+test("full lifecycle: goal start, run end, goal complete, final run end", () => {
+	const plain = baseConfig().auto;
+	const gated = baseConfig({ auto: { suppressTaskNotify: true } }).auto;
+
+	const walk = (auto: NotifyConfig["auto"]): string[] => {
+		const out: string[] = [];
+		let goalActive = nextGoalActive(false, { type: "session_start" });
+
+		// 1. The model opens a goal, which pi-notify announces.
+		goalActive = nextGoalActive(goalActive, { type: "goal_created" });
+		out.push("goal:started");
+
+		// 2. A checkpoint run settles while the goal is still open.
+		const mid = decideRunEnd({ goalActive, aborted: false, failed: false, seconds: 90 }, auto);
+		if (mid) out.push(`run:${mid.scope}`);
+
+		// 3. The model completes the goal, which pi-notify announces as well.
+		goalActive = nextGoalActive(goalActive, { type: "goal_status", status: "complete" });
+		out.push("goal:complete");
+
+		// 4. The session settles after the goal is finished.
+		const end = decideRunEnd({ goalActive, aborted: false, failed: false, seconds: 120 }, auto);
+		if (end) out.push(`run:${end.scope}`);
+		return out;
+	};
+
+	// With the gate off every run end is announced, even the checkpoint in the middle of a goal.
+	assert.deepEqual(walk(plain), ["goal:started", "run:task_complete", "goal:complete", "run:task_complete"]);
+	// With the gate on the goal owns the session: only the goal events survive.
+	assert.deepEqual(walk(gated), ["goal:started", "goal:complete", "run:task_complete"]);
 });
