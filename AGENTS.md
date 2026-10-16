@@ -74,10 +74,11 @@ show the command; do not run it.
 npm publish            # package name: pi-notify-phone (pi-notify is taken by another project)
 ```
 
-Both git remotes are kept in sync after every commit:
+Both git remotes are kept in sync after every commit. `origin` is the public GitHub repository,
+`gitea` is the private LAN mirror:
 
 ```bash
-git push origin main && git push github main
+git push origin main && git push gitea main
 ```
 
 After a history rewrite, Pi's installed checkout under `~/.pi/agent/git/<host>/<owner>/<repo>` must be
