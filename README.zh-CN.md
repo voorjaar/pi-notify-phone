@@ -117,7 +117,7 @@ node scripts/send.ts "pi-notify-phone" "hello" info
 | `logEnabled` | `true` | 关掉发送历史。 |
 | `schedules` | `[]` | 预置的定时通知，例如每天一次的站会提醒。 |
 
-场景开关（`auto.scopes`）：每个场景一个开关。只告诉你“某件事开始了”的场景默认关闭，凡是报告“结果”的场景默认开启。
+场景开关（`auto.scopes`）：每个场景一个开关。只是重复提醒“某件事开始了”、或者你在屏幕上已经看得见的，默认关闭；凡是报告“结果”的默认开启。
 
 | 场景 | 默认 | 触发时机 |
 | --- | --- | --- |
@@ -133,7 +133,7 @@ node scripts/send.ts "pi-notify-phone" "hello" info
 | `bg_complete` | 开 | 后台任务完成 |
 | `bg_failed` | 开 | 后台任务失败、被杀掉或超时 |
 | `tool_error` | **关** | 某次工具调用返回错误 |
-| `ui_prompt` | 开 | 某个扩展打开了阻塞式输入框 |
+| `ui_prompt` | **关** | 某个扩展打开了阻塞式输入框 |
 | `reminder` | 开 | 定时提醒到点 |
 | `manual` | 开 | 你或助手明确要求的一次发送 |
 

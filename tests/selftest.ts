@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
-import { defaultConfig, findProblems, loadConfig, mergeConfig, normalizeConfig, resolveAgentDir } from "../src/config.ts";
+import { ALL_SCOPES, DEFAULT_SCOPES, defaultConfig, findProblems, loadConfig, mergeConfig, normalizeConfig, resolveAgentDir } from "../src/config.ts";
 import { ReminderScheduler, fileStore, makeId, memoryStore } from "../src/scheduler.ts";
 import { NotifyBus, QuestionUiDedupe, composeRequest, decideRunEnd, readNotifyLog } from "../src/bus.ts";
 import { nextGoalActive } from "../src/goals.ts";
@@ -827,6 +828,7 @@ test("goal and background scenarios are separate scopes, with results on and sta
 	assert.equal(scopes.bg_start, false, "a launch echo is opt-in");
 	assert.equal(scopes.bg_complete, true);
 	assert.equal(scopes.bg_failed, true);
+	assert.equal(scopes.ui_prompt, false, "a dialog you are already looking at does not need a push");
 
 	// `goal` and `bg` remain usable as group names in the env list.
 	const dir = scratchDir();
@@ -851,6 +853,35 @@ test("goal and background scenarios are separate scopes, with results on and sta
 	const typo = loadConfig({ cwd: dir, agentDir: dir, env: { PI_NOTIFY_AUTO_SCOPES: "goalcompete" } }).config;
 	assert.equal(typo.auto.scopes.goal_complete, true, "an unknown scope name leaves the defaults alone");
 	rmSync(dir, { recursive: true, force: true });
+});
+
+test("a question notification covers the ui_prompt dialog it opened", () => {
+	const dedupe = new QuestionUiDedupe();
+	assert.equal(dedupe.shouldSkipUiPrompt(500), false, "no question was asked");
+	dedupe.noteQuestion(1000);
+	assert.equal(dedupe.shouldSkipUiPrompt(1005), true, "the dialog that same question opened");
+	assert.equal(dedupe.shouldSkipUiPrompt(1010), false, "the mark is consumed by the first dialog");
+	dedupe.noteQuestion(2000);
+	assert.equal(dedupe.shouldSkipUiPrompt(9000), false, "a much later dialog is unrelated");
+});
+
+test("the scenario table in both READMEs matches the code defaults", () => {
+	const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+	const ON = new Set(["on", "true", "开"]);
+	const OFF = new Set(["off", "false", "关"]);
+	for (const file of ["README.md", "README.zh-CN.md"]) {
+		const text = readFileSync(join(repoRoot, file), "utf8");
+		const documented = new Map<string, boolean>();
+		for (const match of text.matchAll(/^\| `([a-z_]+)` \| ([^|]+) \|/gm)) {
+			const state = match[2].replace(/\*\*/g, "").trim();
+			if (ON.has(state)) documented.set(match[1], true);
+			if (OFF.has(state)) documented.set(match[1], false);
+		}
+		assert.deepEqual([...documented.keys()].sort(), [...ALL_SCOPES].sort(), `${file} documents every scenario`);
+		for (const scope of ALL_SCOPES) {
+			assert.equal(documented.get(scope), DEFAULT_SCOPES[scope], `${file}: ${scope} default`);
+		}
+	}
 });
 
 test("the bus gates the new scopes like any other automatic scenario", async () => {

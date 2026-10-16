@@ -61,7 +61,7 @@ export const DEFAULT_SCOPES: Record<NotifyScope, boolean> = {
 	bg_complete: true,
 	bg_failed: true,
 	tool_error: false,
-	ui_prompt: true,
+	ui_prompt: false,
 	reminder: true,
 	manual: true,
 };

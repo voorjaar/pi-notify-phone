@@ -129,8 +129,9 @@ Invalid values are ignored and reported by `/notify status` instead of breaking 
 | `logEnabled` | `true` | Turn the send history off. |
 | `schedules` | `[]` | Predefined scheduled notifications, e.g. a daily standup ping. |
 
-Scenario scopes (`auto.scopes`): one switch each. A scenario that only announces that something
-*began* starts off; everything that reports a *result* starts on.
+Scenario scopes (`auto.scopes`): one switch each. A scenario that only echoes something that just
+*began*, or something you can already see on screen, starts off; everything that reports a *result*
+starts on.
 
 | Scope | Default | Fires when |
 | --- | --- | --- |
@@ -146,7 +147,7 @@ Scenario scopes (`auto.scopes`): one switch each. A scenario that only announces
 | `bg_complete` | on | A background task completes |
 | `bg_failed` | on | A background task fails, is killed, or times out |
 | `tool_error` | **off** | A tool call returns an error |
-| `ui_prompt` | on | An extension opens a blocking input dialog |
+| `ui_prompt` | **off** | An extension opens a blocking input dialog |
 | `reminder` | on | A scheduled reminder is due |
 | `manual` | on | You or the agent asked for a send explicitly |
 
