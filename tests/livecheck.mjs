@@ -77,7 +77,7 @@ const SCENARIOS = [
 		kind: "print",
 		prompt: OPEN_GOAL_PROMPT,
 		env: { PI_NOTIFY_SUPPRESS_TASK_NOTIFY: "0" },
-		expect: ["goal", "task_complete"],
+		expect: ["goal_start", "task_complete"],
 		note: "print mode settles right after create_goal, so the goal is open at settlement",
 	},
 	{
@@ -85,7 +85,7 @@ const SCENARIOS = [
 		kind: "print",
 		prompt: OPEN_GOAL_PROMPT,
 		env: { PI_NOTIFY_SUPPRESS_TASK_NOTIFY: "1" },
-		expect: ["goal"],
+		expect: ["goal_start"],
 		note: "the same run, with the gate on: only the goal event survives",
 	},
 	{
@@ -127,14 +127,24 @@ function parseLogText(text) {
 }
 
 /**
- * Sends are fire-and-forget inside the extension and other Pi sessions write to the same log, so the
- * window is sliced by bytes and then narrowed to the sends that carry this session's project name.
+ * Sends are fire-and-forget inside the extension and other Pi sessions write to the same log. The log is
+ * also capped and rewritten, so a byte offset captured before a run can point past the end of the file:
+ * the window is the wall-clock span of the run, and sends are matched by the project name they carry.
+ * The read repeats until the window stops growing, because a send is logged when its HTTP request lands.
  */
-function sendsSince(before, sessionTag, settleSeconds = 3) {
-	spawnSync("sleep", [String(settleSeconds)]);
-	const window = parseLogText(logBytes().subarray(before).toString("utf8"));
-	const tagged = window.filter((send) => typeof send.body === "string" && send.body.includes(`session: ${sessionTag}`));
-	return { sends: tagged.length > 0 ? tagged : window, untagged: tagged.length === 0 };
+function sendsSince(sinceMs, sessionTag, settleSeconds = 12) {
+	const deadline = Date.now() + settleSeconds * 1000;
+	let previous = -1;
+	for (;;) {
+		const window = parseLogText(logBytes().toString("utf8")).filter((send) => typeof send.ts === "number" && send.ts >= sinceMs);
+		const tagged = window.filter((send) => typeof send.body === "string" && send.body.includes(`session: ${sessionTag}`));
+		const settledAt = Date.now() >= deadline;
+		if (tagged.length === previous || settledAt) {
+			return { sends: tagged.length > 0 ? tagged : window, untagged: tagged.length === 0 };
+		}
+		previous = tagged.length;
+		spawnSync("sleep", ["1"]);
+	}
 }
 
 function extensionArgs() {
@@ -175,7 +185,7 @@ function parseTools(stdout) {
 }
 
 function runPrint(scenario, sessionTag, cwd) {
-	const before = logBytes().length;
+	const sinceMs = Date.now();
 	const args = ["--mode", "json", ...extensionArgs(), "-p", scenario.prompt];
 	const result = spawnSync("pi", args, {
 		cwd,
@@ -191,13 +201,13 @@ function runPrint(scenario, sessionTag, cwd) {
 		stderrTail: (result.stderr ?? "").trim().split("\n").slice(-3).join("\n"),
 		stream: stdout,
 		tools: parseTools(stdout),
-		...sendsSince(before, sessionTag),
+		...sendsSince(sinceMs, sessionTag),
 	};
 }
 
 /** One rpc session, two prompts, so two runs settle while the goal is still open. */
 function runRpc(scenario, sessionTag, cwd) {
-	const before = logBytes().length;
+	const sinceMs = Date.now();
 	const child = spawn("pi", ["--mode", "rpc", ...extensionArgs()], { cwd, env: scenarioEnv(scenario) });
 
 	const found = { seen: new Set(), counts: new Map() };
@@ -274,7 +284,7 @@ function runRpc(scenario, sessionTag, cwd) {
 			failures,
 			stream: events.map((event) => JSON.stringify(event)).join("\n"),
 			tools: found.counts,
-			...sendsSince(before, sessionTag),
+			...sendsSince(sinceMs, sessionTag),
 		};
 	};
 
@@ -305,15 +315,22 @@ function runRpc(scenario, sessionTag, cwd) {
 				failures,
 				stream: events.map((event) => JSON.stringify(event)).join("\n"),
 				tools: found.counts,
-				...sendsSince(before, sessionTag),
+				...sendsSince(sinceMs, sessionTag),
 			};
 		}),
 	]);
 }
 
+/**
+ * Order-insensitive: the log records when a delivery resolved, not when the event fired, so two sends
+ * from one run can appear in either order. What is asserted is which scenarios fired at all.
+ */
 function judgeSequence(actual, expect) {
-	const pass = actual.length === expect.length && actual.every((scope, index) => scope === expect[index]);
-	return { pass, detail: `expected: ${expect.join(", ")}\n  actual:   ${actual.join(", ") || "none"}` };
+	const sorted = (list) => [...list].sort();
+	const a = sorted(actual);
+	const e = sorted(expect);
+	const pass = a.length === e.length && a.every((scope, index) => scope === e[index]);
+	return { pass, detail: `expected: ${e.join(", ")}\n  actual:   ${a.join(", ") || "none"}` };
 }
 
 /**
@@ -322,8 +339,8 @@ function judgeSequence(actual, expect) {
  * how many of them exist while the goal is open.
  */
 function judgeLifecycle(sends, want) {
-	const goalStarts = sends.filter((s) => s.scope === "goal" && /started/i.test(s.title ?? "")).length;
-	const goalCompletes = sends.filter((s) => s.scope === "goal" && /complete/i.test(s.title ?? "")).length;
+	const goalStarts = sends.filter((s) => s.scope === "goal_start").length;
+	const goalCompletes = sends.filter((s) => s.scope === "goal_complete").length;
 	const runEnds = sends.filter((s) => s.scope === "task_complete" || s.scope === "task_failed").length;
 	const ok =
 		goalStarts === want.goalStarts &&
