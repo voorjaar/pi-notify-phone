@@ -5,7 +5,8 @@
 * Split the `goal` scenario into `goal_start`, `goal_complete`, `goal_blocked`, and `goal_paused`, so the
   notification that a goal began can be switched off on its own. `goal_start` is off by default; the other
   three are on. `goal` still works as a group name in `/notify scope goal off` and in
-  `PI_NOTIFY_AUTO_SCOPES`.
+  `PI_NOTIFY_AUTO_SCOPES`, and a config file written before the split that sets `"goal": false` in
+  `auto.scopes` is honoured for the whole group rather than ignored.
 * Added the background-task scenarios: `bg_start` (a task launched with `bg_run`, off by default),
   `bg_complete`, and `bg_failed`. A background task settles by injecting a notification message rather than
   an event, so its id, name, status, and error are read out of that message.

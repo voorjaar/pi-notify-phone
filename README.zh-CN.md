@@ -137,7 +137,8 @@ node scripts/send.ts "pi-notify-phone" "hello" info
 | `reminder` | 开 | 定时提醒到点 |
 | `manual` | 开 | 你或助手明确要求的一次发送 |
 
-`goal` 和 `bg` 是组名，一次覆盖整族场景：`PI_NOTIFY_AUTO_SCOPES=goal:off` 或 `/notify scope goal off` 会把四个 goal 场景一起关掉。
+`goal` 和 `bg` 是组名，一次覆盖整族场景：`/notify scope goal off` 或 `PI_NOTIFY_AUTO_SCOPES=goal:off` 会把四个 goal 场景一起关掉。
+拆分之前写的配置文件里如果写了 `"goal": false`（或 `"bg": true`），依然对整族生效；同一层里明确写了哪个场景，就以那个场景为准。
 在 `PI_NOTIFY_AUTO_SCOPES` 里，`noquestion` 和 `question:off` 两种写法都接受；出现不认识的名字时，整条覆盖会被丢弃，而不是只生效一半。
 
 一次阻塞的 `ask_user_question` 会同时触发 `question` 和 `ui_prompt_start`。`question` 通知已经覆盖了这个提问，所以不会再推一条 `ui_prompt`。

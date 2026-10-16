@@ -151,10 +151,11 @@ starts on.
 | `reminder` | on | A scheduled reminder is due |
 | `manual` | on | You or the agent asked for a send explicitly |
 
-`goal` and `bg` are group names that cover a whole family at once, so a pre-split setting still
-works: `"goal": false` in the env list or `/notify scope goal off` switches all four goal scenarios.
-In `PI_NOTIFY_AUTO_SCOPES`, both `noquestion` and `question:off` are accepted, and an unknown name
-drops the whole override rather than applying half of it.
+`goal` and `bg` are group names that cover a whole family at once: `/notify scope goal off` or
+`PI_NOTIFY_AUTO_SCOPES=goal:off` switches all four goal scenarios. A config file written before the split
+that sets `"goal": false` (or `"bg": true`) in `auto.scopes` is still honoured for the whole group, and a
+scenario named in the same layer wins over the group. In `PI_NOTIFY_AUTO_SCOPES`, both `noquestion` and
+`question:off` are accepted, and an unknown name drops the whole override rather than applying half of it.
 
 One blocking `ask_user_question` arrives as both `question` and `ui_prompt_start`. The `question`
 notification covers the dialog, so no separate `ui_prompt` push follows it.

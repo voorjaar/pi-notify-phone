@@ -884,6 +884,24 @@ test("the scenario table in both READMEs matches the code defaults", () => {
 	}
 });
 
+test("a pre-split config that names only the group still applies to its members", () => {
+	const dir = scratchDir();
+	writeFileSync(join(dir, "pi-notify.json"), JSON.stringify({ auto: { scopes: { goal: false, bg: true } } }));
+	const scopes = loadConfig({ cwd: dir, agentDir: dir }).config.auto.scopes;
+	assert.equal(scopes.goal_complete, false, "goal: false turns off every goal scenario");
+	assert.equal(scopes.goal_start, false);
+	assert.equal(scopes.bg_complete, true, "bg: true turns on every background scenario");
+	assert.equal(scopes.bg_start, true);
+	assert.equal(scopes.task_complete, true, "unrelated scopes keep their default");
+
+	// An explicit scope wins over the group name.
+	writeFileSync(join(dir, "pi-notify.json"), JSON.stringify({ auto: { scopes: { goal: false, goal_complete: true } } }));
+	const mixed = loadConfig({ cwd: dir, agentDir: dir }).config.auto.scopes;
+	assert.equal(mixed.goal_complete, true, "the specific setting is not overwritten by the group");
+	assert.equal(mixed.goal_blocked, false);
+	rmSync(dir, { recursive: true, force: true });
+});
+
 test("the bus gates the new scopes like any other automatic scenario", async () => {
 	const clock = new FakeClock();
 	const off = new NotifyBus(baseConfig(), { transport: fakeSend(), now: () => clock.now() });

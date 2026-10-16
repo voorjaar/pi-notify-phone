@@ -328,9 +328,10 @@ export function normalizeConfig(config: NotifyConfig): NotifyConfig {
 	out.ntfy.priority = normalizePriorities(out.ntfy.priority);
 	out.ntfy.tags = Array.isArray(out.ntfy.tags) ? out.ntfy.tags.map((t) => String(t).trim()).filter(Boolean) : [];
 
-	const scopes = { ...out.auto.scopes };
+	const raw = out.auto.scopes as Record<string, unknown>;
+	const scopes = {} as Record<NotifyScope, boolean>;
 	for (const scope of ALL_SCOPES) {
-		if (typeof scopes[scope] !== "boolean") scopes[scope] = DEFAULT_SCOPES[scope];
+		scopes[scope] = typeof raw[scope] === "boolean" ? (raw[scope] as boolean) : DEFAULT_SCOPES[scope];
 	}
 	out.auto.scopes = scopes;
 	return out;
@@ -399,6 +400,32 @@ export interface LoadConfigOptions {
 	now?: number;
 }
 
+/**
+ * A config layer may name a scope group (`goal`, `bg`) instead of the individual scenarios. Expanding it
+ * per layer, before layers merge, is what lets a later layer still override one member of the group.
+ */
+function expandScopeGroups(patch: Record<string, unknown>): Record<string, unknown> {
+	const auto = patch.auto;
+	if (!auto || typeof auto !== "object" || Array.isArray(auto)) return patch;
+	const scopes = (auto as Record<string, unknown>).scopes;
+	if (!scopes || typeof scopes !== "object" || Array.isArray(scopes)) return patch;
+
+	const expanded: Record<string, unknown> = { ...scopes };
+	let changed = false;
+	for (const [group, members] of Object.entries(SCOPE_GROUPS)) {
+		if (typeof expanded[group] !== "boolean") continue;
+		const value = expanded[group];
+		delete expanded[group];
+		for (const member of members) {
+			// A member the same layer names explicitly wins over the group.
+			if (!(member in expanded)) expanded[member] = value;
+		}
+		changed = true;
+	}
+	if (!changed) return patch;
+	return { ...patch, auto: { ...(auto as Record<string, unknown>), scopes: expanded } };
+}
+
 export function loadConfig(options: LoadConfigOptions): LoadedConfig {
 	const env = options.env ?? process.env;
 	const agentDir = options.agentDir ?? resolveAgentDir(env);
@@ -415,7 +442,7 @@ export function loadConfig(options: LoadConfigOptions): LoadedConfig {
 	for (const path of [personalPath, projectPath, projectLocalPath]) {
 		const { data, error } = readJsonFile(path);
 		layers.push({ path, loaded: data !== undefined, error });
-		if (data) patches.push(data);
+		if (data) patches.push(expandScopeGroups(data));
 	}
 
 	const envPatch = envLayerPatch(env);
