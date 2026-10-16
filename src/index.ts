@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 
 import { NotifyBus, QuestionUiDedupe, decideRunEnd, readNotifyLog } from "./bus.ts";
 import { nextGoalActive } from "./goals.ts";
-import { messageText, taskStartBody } from "./announcements.ts";
+import { messageText, reminderStatusText, taskStartBody } from "./announcements.ts";
 import { loadConfig, resolveAgentDir } from "./config.ts";
 import { decryptNtfyBody, isNtfyEnvelope } from "./crypto.ts";
 import { sendNotification } from "./providers.ts";
@@ -113,12 +113,15 @@ export default function (pi: ExtensionAPI) {
 		return scheduler?.list() ?? [];
 	}
 
-	function statusLine(): string {
-		const pending = reminders().length;
-		const provider = config.provider;
-		const state = config.enabled ? (config.auto.enabled ? "on" : "manual only") : "off";
-		const muted = bus.mutedUntil > Date.now();
-		return `notify ${provider} ${state}${muted ? " (muted)" : ""}${pending ? ` · ${pending} reminders` : ""}`;
+	/**
+	 * The footer line: a clock and the pending reminder count in the configured theme color, and nothing
+	 * at all when there is nothing pending. Everything else (provider, switches, mute, goal state) lives
+	 * in `/notify status`.
+	 */
+	function statusLine(ctx: ExtensionContext): string | undefined {
+		const text = reminderStatusText(reminders().length);
+		if (!text) return undefined;
+		return ctx.ui.theme.fg(config.statusColor, text);
 	}
 
 	function reportSend(scope: NotifyScope, result: SendResult, ctx: ExtensionContext): void {
@@ -142,7 +145,7 @@ export default function (pi: ExtensionAPI) {
 		if (problems.fatal.length > 0) {
 			ctx.ui.notify(`pi-notify: ${problems.fatal.join(" · ")} - see /notify status`, "warning");
 		}
-		ctx.ui.setStatus("pi-notify", statusLine());
+		ctx.ui.setStatus("pi-notify", statusLine(ctx));
 	});
 
 	pi.on("session_shutdown", async () => {
@@ -428,7 +431,7 @@ export default function (pi: ExtensionAPI) {
 				config.enabled = sub === "on";
 				bus.setConfig(config);
 				ctx.ui.notify(`pi-notify ${sub} (this session). Edit pi-notify.json to make it permanent.`, "info");
-				ctx.ui.setStatus("pi-notify", statusLine());
+				ctx.ui.setStatus("pi-notify", statusLine(ctx));
 				return;
 			}
 			if (sub === "auto") {
@@ -440,7 +443,7 @@ export default function (pi: ExtensionAPI) {
 				config.auto.enabled = state === "on";
 				bus.setConfig(config);
 				ctx.ui.notify(`automatic notifications ${state}; manual sends stay ${config.auto.scopes.manual ? "on" : "off"}`, "info");
-				ctx.ui.setStatus("pi-notify", statusLine());
+				ctx.ui.setStatus("pi-notify", statusLine(ctx));
 				return;
 			}
 			if (sub === "scope") {
@@ -467,7 +470,7 @@ export default function (pi: ExtensionAPI) {
 					`run-end notifications while a goal runs: ${state === "on" ? "suppressed" : "enabled"}. Edit pi-notify.json to make it permanent.`,
 					"info",
 				);
-				ctx.ui.setStatus("pi-notify", statusLine());
+				ctx.ui.setStatus("pi-notify", statusLine(ctx));
 				return;
 			}
 			if (sub === "provider") {
@@ -480,7 +483,7 @@ export default function (pi: ExtensionAPI) {
 				bus.setConfig(config);
 				problems = reloadProblems();
 				ctx.ui.notify(`provider is ${provider}${problems.fatal.length ? ` (${problems.fatal.join(" · ")})` : ""}`, problems.fatal.length ? "warning" : "info");
-				ctx.ui.setStatus("pi-notify", statusLine());
+				ctx.ui.setStatus("pi-notify", statusLine(ctx));
 				return;
 			}
 			if (sub === "test") {
@@ -510,7 +513,7 @@ export default function (pi: ExtensionAPI) {
 					ctx.ui.notify("scheduler unavailable", "error");
 					return;
 				}
-				ctx.ui.setStatus("pi-notify", statusLine());
+				ctx.ui.setStatus("pi-notify", statusLine(ctx));
 				ctx.ui.notify(`scheduled ${entry.id} for ${formatWhen(entry.dueAt)}${entry.everyMs > 0 ? ` every ${formatDuration(entry.everyMs)}` : ""} (${formatRelative(entry.dueAt, Date.now())})`, "info");
 				return;
 			}
@@ -530,12 +533,12 @@ export default function (pi: ExtensionAPI) {
 					return;
 				}
 				ctx.ui.notify(scheduler?.cancel(id) ? `cancelled ${id}` : `no reminder with id ${id}`, "info");
-				ctx.ui.setStatus("pi-notify", statusLine());
+				ctx.ui.setStatus("pi-notify", statusLine(ctx));
 				return;
 			}
 			if (sub === "clear") {
 				const removed = scheduler?.clear() ?? 0;
-				ctx.ui.setStatus("pi-notify", statusLine());
+				ctx.ui.setStatus("pi-notify", statusLine(ctx));
 				ctx.ui.notify(`cleared ${removed} scheduled notification(s)`, "info");
 				return;
 			}
@@ -543,13 +546,13 @@ export default function (pi: ExtensionAPI) {
 				const raw = Number(parts[1] ?? 30);
 				const minutes = Number.isFinite(raw) ? Math.min(24 * 60, Math.max(1, Math.floor(raw))) : 30;
 				bus.setMute(Date.now() + minutes * 60 * 1000);
-				ctx.ui.setStatus("pi-notify", statusLine());
+				ctx.ui.setStatus("pi-notify", statusLine(ctx));
 				ctx.ui.notify(`automatic notifications muted for ${minutes} min; manual sends still work`, "info");
 				return;
 			}
 			if (sub === "unmute") {
 				bus.setMute(0);
-				ctx.ui.setStatus("pi-notify", statusLine());
+				ctx.ui.setStatus("pi-notify", statusLine(ctx));
 				ctx.ui.notify("automatic notifications unmuted", "info");
 				return;
 			}

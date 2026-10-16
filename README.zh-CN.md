@@ -80,6 +80,7 @@ node scripts/send.ts "pi-notify-phone" "hello" info
 | `enabled` | `true` | 总开关。关掉后什么都不发，包括手动发送。 |
 | `titlePrefix` | `Pi` | 通知标题前缀；`null` 表示不加前缀。 |
 | `includeSession` | `true` | 每条正文末尾附上 `session: <项目名>`。 |
+| `statusColor` | `accent` | 底栏状态的颜色（一个时钟加待发送提醒数量，只在有排程时显示）。可用任意 Pi 主题色 token：`accent`、`success`、`warning`、`error`、`muted`、`mdCode`、`mdLink`。 |
 | `timeoutMs` | `8000` | 单次请求超时。 |
 | `retries` | `2` | 5xx 与网络错误的重试次数（4xx 不重试）。 |
 | `bark.key` / `bark.keys` | - | Bark App 里的设备密钥。多个密钥会给多台设备发送。 |
@@ -132,7 +133,7 @@ node scripts/send.ts "pi-notify-phone" "hello" info
 一次阻塞的 `ask_user_question` 会同时触发 `question` 和 `ui_prompt_start`。`question` 通知已经覆盖了这个提问，所以不会再推一条 `ui_prompt`。
 
 环境变量覆盖（优先级高于配置文件）：`PI_NOTIFY_PROVIDER`、`PI_NOTIFY_ENABLED`、
-`PI_NOTIFY_TITLE`、`PI_NOTIFY_AUTO_ENABLED`、`PI_NOTIFY_AUTO_SCOPES=question:on,goal:off`、
+`PI_NOTIFY_TITLE`、`PI_NOTIFY_STATUS_COLOR`、`PI_NOTIFY_AUTO_ENABLED`、`PI_NOTIFY_AUTO_SCOPES=question:on,goal:off`、
 `PI_NOTIFY_MIN_RUN_SECONDS`、`PI_NOTIFY_GOAL_MIN_SECONDS`、`PI_NOTIFY_SUPPRESS_TASK_NOTIFY`、`PI_NOTIFY_THROTTLE_SECONDS`、`PI_NOTIFY_BARK_KEY`
 （逗号分隔可写多台设备）、`PI_NOTIFY_BARK_BASE_URL`、`PI_NOTIFY_BARK_GROUP`、
 `PI_NOTIFY_BARK_SOUND`、`PI_NOTIFY_BARK_ICON`、`PI_NOTIFY_BARK_ENCRYPT`、

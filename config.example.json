@@ -3,6 +3,7 @@
   "enabled": true,
   "titlePrefix": "Pi",
   "includeSession": true,
+  "statusColor": "accent",
   "timeoutMs": 8000,
   "retries": 2,
   "bark": {
@@ -11,7 +12,11 @@
     "group": "pi",
     "sound": "glass",
     "icon": "https://day.app/assets/images/avatar.jpg",
-    "level": { "info": "active", "warning": "timeSensitive", "critical": "critical" },
+    "level": {
+      "info": "active",
+      "warning": "timeSensitive",
+      "critical": "critical"
+    },
     "callOnCritical": true,
     "ttlSeconds": 600,
     "encryption": {
@@ -26,9 +31,18 @@
     "topic": "pick-a-hard-to-guess-topic",
     "token": "",
     "markdown": false,
-    "priority": { "info": 3, "warning": 4, "critical": 5 },
-    "tags": ["pi"],
-    "encryption": { "enabled": false, "key": "a-passphrase" }
+    "priority": {
+      "info": 3,
+      "warning": 4,
+      "critical": 5
+    },
+    "tags": [
+      "pi"
+    ],
+    "encryption": {
+      "enabled": false,
+      "key": "a-passphrase"
+    }
   },
   "maxLateMs": 21600000,
   "logEnabled": true,
@@ -53,6 +67,12 @@
     "notifyAborted": false
   },
   "schedules": [
-    { "id": "standup", "body": "Standup", "at": "09:30", "every": "1d", "level": "info" }
+    {
+      "id": "standup",
+      "body": "Standup",
+      "at": "09:30",
+      "every": "1d",
+      "level": "info"
+    }
   ]
 }

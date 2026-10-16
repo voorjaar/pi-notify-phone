@@ -8,7 +8,7 @@ import { defaultConfig, findProblems, loadConfig, mergeConfig, normalizeConfig, 
 import { ReminderScheduler, fileStore, makeId, memoryStore } from "../src/scheduler.ts";
 import { NotifyBus, QuestionUiDedupe, composeRequest, decideRunEnd, readNotifyLog } from "../src/bus.ts";
 import { nextGoalActive } from "../src/goals.ts";
-import { messageText, taskStartBody } from "../src/announcements.ts";
+import { messageText, reminderStatusText, taskStartBody } from "../src/announcements.ts";
 import { decryptBarkPayload, decryptNtfyBody, isNtfyEnvelope } from "../src/crypto.ts";
 import { buildBarkRequests, buildNtfyRequest, sendNotification } from "../src/providers.ts";
 import { formatDuration, formatRelative, parseDuration, parseWhen } from "../src/time.ts";
@@ -815,6 +815,29 @@ test("the bus gates task_start like any other automatic scope", async () => {
 	const on = new NotifyBus(baseConfig({ auto: { scopes: { task_start: true } } }), { transport: fakeSend(), now: () => clock.now() });
 	const allowed = await on.send({ scope: "task_start", body: "a run started" });
 	assert.equal(allowed.ok, true);
+});
+
+test("the footer status is a clock and a count, or nothing", () => {
+	assert.equal(reminderStatusText(0), undefined, "nothing pending shows nothing");
+	assert.equal(reminderStatusText(1), "⏱ 1");
+	assert.equal(reminderStatusText(12), "⏱ 12");
+});
+
+test("statusColor defaults to accent and is clamped to a theme token", () => {
+	const dir = mkdtempSync(join(tmpdir(), "notify-color-"));
+	const agentDir = join(dir, "agent");
+	mkdirSync(agentDir);
+	writeFileSync(join(agentDir, "pi-notify.json"), JSON.stringify({ statusColor: "warning" }));
+	assert.equal(loadConfig({ cwd: dir, agentDir }).config.statusColor, "warning");
+
+	writeFileSync(join(agentDir, "pi-notify.json"), JSON.stringify({ statusColor: "hotpink" }));
+	const loaded = loadConfig({ cwd: dir, agentDir });
+	assert.equal(loaded.config.statusColor, "accent", "an unknown token falls back instead of breaking the footer");
+	assert.ok(!loaded.problems.fatal.some((problem) => problem.includes("statusColor")));
+	assert.ok(!loaded.problems.warnings.some((problem) => problem.includes("statusColor")));
+
+	assert.equal(loadConfig({ cwd: dir, agentDir: mkdtempSync(join(tmpdir(), "notify-none-")) }).config.statusColor, "accent");
+	assert.equal(loadConfig({ cwd: dir, agentDir, env: { PI_NOTIFY_STATUS_COLOR: "success" } }).config.statusColor, "success");
 });
 
 test("message content flattens to text instead of a JSON list", () => {

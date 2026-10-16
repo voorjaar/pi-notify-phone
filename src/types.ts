@@ -166,6 +166,12 @@ export interface ScheduleEntry {
 	source: string;
 }
 
+/**
+ * Theme color tokens the footer status may use. These are Pi theme token names, so the color follows
+ * whatever theme the user runs.
+ */
+export type StatusColor = "accent" | "success" | "warning" | "error" | "muted" | "mdCode" | "mdLink";
+
 export interface NotifyConfig {
 	provider: ProviderName;
 	/** Master switch: when false, nothing is sent. */
@@ -174,6 +180,8 @@ export interface NotifyConfig {
 	titlePrefix: string;
 	/** Append the project directory name to every body. */
 	includeSession: boolean;
+	/** Color of the compact footer status (a pending-reminder count). */
+	statusColor: StatusColor;
 	timeoutMs: number;
 	retries: number;
 	retryDelayMs: number;

@@ -35,3 +35,12 @@ export function taskStartBody(text: string): string {
 	if (collapsed === "" || collapsed.includes("pi_goal_continuation")) return "A run started.";
 	return collapsed.length > TASK_START_SNIPPET_CHARS ? `${collapsed.slice(0, TASK_START_SNIPPET_CHARS)}...` : collapsed;
 }
+
+/**
+ * The footer status: a clock and the number of pending reminders, or nothing at all. Provider, switch
+ * state, and mute state belong to `/notify status`, not to a one-line footer.
+ */
+export function reminderStatusText(pending: number): string | undefined {
+	if (pending <= 0) return undefined;
+	return `⏱ ${pending}`;
+}

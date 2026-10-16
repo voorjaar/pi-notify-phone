@@ -22,6 +22,7 @@ import type {
 	NotifyScope,
 	ProviderName,
 	ScheduleEntry,
+	StatusColor,
 } from "./types.ts";
 
 export const PERSONAL_CONFIG_FILE = "pi-notify.json";
@@ -39,6 +40,9 @@ export const ALL_SCOPES: NotifyScope[] = [
 	"reminder",
 	"manual",
 ];
+
+/** Theme tokens the footer status may be painted with. */
+export const STATUS_COLORS: StatusColor[] = ["accent", "success", "warning", "error", "muted", "mdCode", "mdLink"];
 
 const BARK_ALGORITHMS: BarkAlgorithm[] = [
 	"aes-128-cbc",
@@ -61,6 +65,7 @@ export function defaultConfig(agentDir: string): NotifyConfig {
 		enabled: true,
 		titlePrefix: "Pi",
 		includeSession: true,
+		statusColor: "accent",
 		timeoutMs: 8000,
 		retries: 2,
 		retryDelayMs: 1500,
@@ -211,6 +216,8 @@ function envLayerPatch(env: Record<string, string | undefined>): Record<string, 
 	if (enabled !== undefined) patch.enabled = enabled;
 	const title = env.PI_NOTIFY_TITLE;
 	if (title) patch.titlePrefix = title;
+	const statusColor = env.PI_NOTIFY_STATUS_COLOR;
+	if (statusColor && STATUS_COLORS.includes(statusColor as StatusColor)) patch.statusColor = statusColor;
 
 	const bark: Record<string, unknown> = {};
 	if (env.PI_NOTIFY_BARK_KEY) bark.keys = env.PI_NOTIFY_BARK_KEY.split(",").map((k) => k.trim()).filter(Boolean);
@@ -265,6 +272,7 @@ export function normalizeConfig(config: NotifyConfig): NotifyConfig {
 	out.retries = Math.max(0, Math.floor(Number(out.retries) || 0));
 	out.retryDelayMs = Math.max(0, Math.floor(Number(out.retryDelayMs) || 0));
 	out.titlePrefix = typeof out.titlePrefix === "string" && out.titlePrefix.trim() !== "" ? out.titlePrefix : "Pi";
+	out.statusColor = STATUS_COLORS.includes(out.statusColor) ? out.statusColor : "accent";
 	out.auto.minRunSeconds = Number.isFinite(out.auto.minRunSeconds) ? Math.max(0, out.auto.minRunSeconds) : 0;
 	out.auto.goalMinSeconds = Number.isFinite(out.auto.goalMinSeconds) ? Math.max(0, out.auto.goalMinSeconds) : 0;
 	out.auto.suppressTaskNotify = out.auto.suppressTaskNotify === true;

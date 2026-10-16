@@ -91,6 +91,7 @@ Invalid values are ignored and reported by `/notify status` instead of breaking 
 | `enabled` | `true` | Master switch. Off sends nothing, including manual sends. |
 | `titlePrefix` | `Pi` | Prefix for notification titles; `null` disables it. |
 | `includeSession` | `true` | Append `session: <project name>` to every body. |
+| `statusColor` | `accent` | Color of the footer status (a clock and the pending reminder count, shown only when something is scheduled). Any Pi theme token: `accent`, `success`, `warning`, `error`, `muted`, `mdCode`, `mdLink`. |
 | `timeoutMs` | `8000` | Per-attempt HTTP timeout. |
 | `retries` | `2` | Retries for 5xx and network errors (not for 4xx). |
 | `bark.key` / `bark.keys` | - | Device key(s) from the Bark app. Multiple keys send to multiple devices. |
@@ -144,7 +145,7 @@ One blocking `ask_user_question` arrives as both `question` and `ui_prompt_start
 notification covers the dialog, so no separate `ui_prompt` push follows it.
 
 Environment overrides (they win over the files): `PI_NOTIFY_PROVIDER`, `PI_NOTIFY_ENABLED`,
-`PI_NOTIFY_TITLE`, `PI_NOTIFY_AUTO_ENABLED`, `PI_NOTIFY_AUTO_SCOPES=question:on,goal:off`,
+`PI_NOTIFY_TITLE`, `PI_NOTIFY_STATUS_COLOR`, `PI_NOTIFY_AUTO_ENABLED`, `PI_NOTIFY_AUTO_SCOPES=question:on,goal:off`,
 `PI_NOTIFY_MIN_RUN_SECONDS`, `PI_NOTIFY_GOAL_MIN_SECONDS`, `PI_NOTIFY_SUPPRESS_TASK_NOTIFY`, `PI_NOTIFY_THROTTLE_SECONDS`, `PI_NOTIFY_BARK_KEY`
 (comma-separated for several devices), `PI_NOTIFY_BARK_BASE_URL`, `PI_NOTIFY_BARK_GROUP`,
 `PI_NOTIFY_BARK_SOUND`, `PI_NOTIFY_BARK_ICON`, `PI_NOTIFY_BARK_ENCRYPT`,
