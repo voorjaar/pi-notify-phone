@@ -33,7 +33,40 @@ export function messageText(content: unknown): string {
 export function taskStartBody(text: string): string {
 	const collapsed = text.replace(/\s+/g, " ").trim();
 	if (collapsed === "" || collapsed.includes("pi_goal_continuation")) return "A run started.";
+	if (collapsed.includes("background-task-notification")) return "A background task result started the run.";
 	return collapsed.length > TASK_START_SNIPPET_CHARS ? `${collapsed.slice(0, TASK_START_SNIPPET_CHARS)}...` : collapsed;
+}
+
+/** A `<background-task-notification>` block the harness injects when a background task settles. */
+export interface BackgroundTaskNotice {
+	taskId: string;
+	name: string;
+	/** `completed`, `failed`, `killed`, ... as reported by the harness. */
+	status: string;
+	summary: string;
+	error?: string;
+}
+
+/**
+ * Parse the harness background-task block. It arrives as a plain text message, so the fields are read
+ * out of the tags rather than from any API.
+ */
+export function backgroundTaskNotice(text: string): BackgroundTaskNotice | undefined {
+	if (!text.includes("background-task-notification")) return undefined;
+	const field = (name: string): string => {
+		const match = text.match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`));
+		return match ? match[1].trim() : "";
+	};
+	const status = field("status");
+	if (status === "") return undefined;
+	const error = field("error");
+	return {
+		taskId: field("task-id"),
+		name: field("task-name"),
+		status,
+		summary: field("summary"),
+		error: error === "" ? undefined : error,
+	};
 }
 
 /**

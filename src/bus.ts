@@ -17,7 +17,22 @@ export interface BusOptions {
 }
 
 /** Scenarios the user never triggers by hand. */
-const AUTOMATIC_SCOPES: NotifyScope[] = ["task_start", "task_complete", "task_failed", "question", "goal", "tool_error", "ui_prompt", "reminder"];
+const AUTOMATIC_SCOPES: NotifyScope[] = [
+	"task_start",
+	"task_complete",
+	"task_failed",
+	"question",
+	"goal_start",
+	"goal_complete",
+	"goal_blocked",
+	"goal_paused",
+	"bg_start",
+	"bg_complete",
+	"bg_failed",
+	"tool_error",
+	"ui_prompt",
+	"reminder",
+];
 
 const LOG_CAP = 200;
 
@@ -237,8 +252,8 @@ export class NotifyBus {
 
 	/** Level used by scenario renderers. */
 	levelFor(scope: NotifyScope): NotifyLevel {
-		if (scope === "task_failed" || scope === "tool_error") return "warning";
-		if (scope === "question") return "warning";
+		if (scope === "task_failed" || scope === "tool_error" || scope === "bg_failed") return "warning";
+		if (scope === "question" || scope === "goal_blocked" || scope === "goal_paused") return "warning";
 		return "info";
 	}
 }

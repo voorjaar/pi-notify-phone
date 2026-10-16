@@ -20,8 +20,10 @@ Pi finishes a long task  ->  pi-notify-phone  ->  https://api.day.app/...  ->  y
   back to plain text.
 - **Automatic or manual**: one master switch, one automatic switch, and a switch per scenario.
   The agent can always send on request as long as the `manual` scope is on.
-- **Scenarios**: task complete / failed / aborted, `ask_user_question` waiting for an answer,
-  goal started / complete / blocked / paused, blocking UI prompts, tool errors, reminders.
+- **Scenarios**: task start / complete / failed / aborted, `ask_user_question` waiting for an answer,
+  goal start / complete / blocked / paused, background task start / complete / failed, blocking UI
+  prompts, tool errors, reminders. Every scenario has its own switch, and the table below lists the
+  defaults.
 - **Reminders and scheduled notifications**: relative (`in 20m`), absolute (`at 08:30`,
   `tomorrow 09:00`), and recurring (`every 1d`), persisted so a restart still delivers them.
 - **Noise control**: minimum run duration, per-scope throttling, duplicate suppression,
@@ -127,25 +129,37 @@ Invalid values are ignored and reported by `/notify status` instead of breaking 
 | `logEnabled` | `true` | Turn the send history off. |
 | `schedules` | `[]` | Predefined scheduled notifications, e.g. a daily standup ping. |
 
-Scenario scopes (`auto.scopes`), all default `true` except `tool_error` and `task_start`:
+Scenario scopes (`auto.scopes`): one switch each. A scenario that only announces that something
+*began* starts off; everything that reports a *result* starts on.
 
-| Scope | Fires on |
-| --- | --- |
-| `task_start` | A run started (the first message of the run). **Default off.** |
-| `task_complete` | A run finished and lasted at least `minRunSeconds` |
-| `task_failed` | A run ended with an API/model error |
-| `question` | `ask_user_question` is waiting for your answer |
-| `goal` | Goal started / complete / blocked / paused |
-| `tool_error` | A tool call returned an error |
-| `ui_prompt` | An extension opened a blocking input dialog |
-| `reminder` | A scheduled reminder is due |
-| `manual` | A send you or the agent asked for explicitly |
+| Scope | Default | Fires when |
+| --- | --- | --- |
+| `task_start` | **off** | A run starts (its first message) |
+| `task_complete` | on | A run finishes, after `auto.minRunSeconds` |
+| `task_failed` | on | A run ends with an API/model error |
+| `question` | on | `ask_user_question` is waiting for your answer |
+| `goal_start` | **off** | A goal starts (a `create_goal` call, or a goal continuation turn) |
+| `goal_complete` | on | A goal completes, after `auto.goalMinSeconds` |
+| `goal_blocked` | on | A goal is set blocked |
+| `goal_paused` | on | A goal is set paused |
+| `bg_start` | **off** | A background task is launched (`bg_run`) |
+| `bg_complete` | on | A background task completes |
+| `bg_failed` | on | A background task fails, is killed, or times out |
+| `tool_error` | **off** | A tool call returns an error |
+| `ui_prompt` | on | An extension opens a blocking input dialog |
+| `reminder` | on | A scheduled reminder is due |
+| `manual` | on | You or the agent asked for a send explicitly |
+
+`goal` and `bg` are group names that cover a whole family at once, so a pre-split setting still
+works: `"goal": false` in the env list or `/notify scope goal off` switches all four goal scenarios.
+In `PI_NOTIFY_AUTO_SCOPES`, both `noquestion` and `question:off` are accepted, and an unknown name
+drops the whole override rather than applying half of it.
 
 One blocking `ask_user_question` arrives as both `question` and `ui_prompt_start`. The `question`
 notification covers the dialog, so no separate `ui_prompt` push follows it.
 
 Environment overrides (they win over the files): `PI_NOTIFY_PROVIDER`, `PI_NOTIFY_ENABLED`,
-`PI_NOTIFY_TITLE`, `PI_NOTIFY_STATUS_COLOR`, `PI_NOTIFY_AUTO_ENABLED`, `PI_NOTIFY_AUTO_SCOPES=question:on,goal:off`,
+`PI_NOTIFY_TITLE`, `PI_NOTIFY_STATUS_COLOR`, `PI_NOTIFY_AUTO_ENABLED`, `PI_NOTIFY_AUTO_SCOPES=question:off,goal:off`,
 `PI_NOTIFY_MIN_RUN_SECONDS`, `PI_NOTIFY_GOAL_MIN_SECONDS`, `PI_NOTIFY_SUPPRESS_TASK_NOTIFY`, `PI_NOTIFY_THROTTLE_SECONDS`, `PI_NOTIFY_BARK_KEY`
 (comma-separated for several devices), `PI_NOTIFY_BARK_BASE_URL`, `PI_NOTIFY_BARK_GROUP`,
 `PI_NOTIFY_BARK_SOUND`, `PI_NOTIFY_BARK_ICON`, `PI_NOTIFY_BARK_ENCRYPT`,
@@ -172,7 +186,7 @@ so it can tell you whether a notification is actually on its way.
 /notify                        status summary
 /notify on | off               master switch (this session)
 /notify auto on | off          automatic scenario notifications
-/notify scope <name> on|off    one scenario
+/notify scope <name> on|off    one scenario, or a group (`goal`, `bg`)
 /notify tasknotify on|off        suppress task notifications while a goal is running
 /notify provider bark|ntfy     transport (this session)
 /notify test                   send one notification to check delivery

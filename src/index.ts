@@ -14,8 +14,8 @@ import { fileURLToPath } from "node:url";
 
 import { NotifyBus, QuestionUiDedupe, decideRunEnd, readNotifyLog } from "./bus.ts";
 import { nextGoalActive } from "./goals.ts";
-import { messageText, reminderStatusText, taskStartBody } from "./announcements.ts";
-import { loadConfig, resolveAgentDir } from "./config.ts";
+import { backgroundTaskNotice, messageText, reminderStatusText, taskStartBody } from "./announcements.ts";
+import { ALL_SCOPES, loadConfig, resolveAgentDir, SCOPE_GROUPS } from "./config.ts";
 import { decryptNtfyBody, isNtfyEnvelope } from "./crypto.ts";
 import { sendNotification } from "./providers.ts";
 import { ReminderScheduler, fileStore } from "./scheduler.ts";
@@ -25,7 +25,7 @@ import type { FetchLike, NotifyConfig, NotifyLevel, NotifyRequest, NotifyScope, 
 const EXT_DIR = dirname(fileURLToPath(import.meta.url));
 const SKILL_PATH = join(EXT_DIR, "..", "skills", "notify", "SKILL.md");
 
-const SCOPES: NotifyScope[] = ["task_start", "task_complete", "task_failed", "question", "goal", "tool_error", "ui_prompt", "reminder", "manual"];
+const SCOPES: NotifyScope[] = ALL_SCOPES;
 
 const fetchImpl: FetchLike = async (url, init) => {
 	const response = await fetch(url, init);
@@ -175,6 +175,23 @@ export default function (pi: ExtensionAPI) {
 				taskStartAnnounced = true;
 				notify("task_start", { title: "Task started", body: taskStartBody(text), level: "info" }, ctx);
 			}
+			// A background task settles by injecting a <background-task-notification> message; there is no
+			// event for it, so the block is parsed out of the injected text.
+			const bg = backgroundTaskNotice(text);
+			if (bg) {
+				const failed = bg.status !== "completed";
+				const name = bg.name || bg.taskId || "unnamed task";
+				notify(
+					failed ? "bg_failed" : "bg_complete",
+					{
+						title: failed ? `Background task ${bg.status}` : "Background task finished",
+						body: failed ? bg.error || bg.summary || `${name} did not finish cleanly.` : bg.summary || `${name} finished.`,
+						meta: [bg.taskId ? `task ${bg.taskId}` : "", failed ? "" : "output file is in .pi/tasks/"].filter(Boolean),
+						level: failed ? "warning" : "info",
+					},
+					ctx,
+				);
+			}
 			// A goal continuation turn means a goal is running. A goal the user started with a slash
 			// command (/goal-direct) never calls create_goal, so the marker is the only signal we get.
 			if (text.includes("pi_goal_continuation")) {
@@ -182,7 +199,7 @@ export default function (pi: ExtensionAPI) {
 				goalActive = nextGoalActive(goalActive, { type: "goal_continuation" });
 				if (!wasActive) {
 					if (!goalStartedAt) goalStartedAt = Date.now();
-					notify("goal", { title: "Goal started", body: "A goal is running in this session.", level: "info" }, ctx);
+					notify("goal_start", { title: "Goal started", body: "A goal is running in this session.", level: "info" }, ctx);
 				}
 			}
 			return;
@@ -224,7 +241,7 @@ export default function (pi: ExtensionAPI) {
 				const seconds = Math.round((Date.now() - startedAt) / 1000);
 				// A goal that finished immediately is usually something the user is already watching.
 				if (seconds >= config.auto.goalMinSeconds) {
-					notify("goal", { title: "Goal complete", body: reason, meta: [`goal ran ${formatDuration(seconds * 1000)}`], level: "info" }, ctx);
+					notify("goal_complete", { title: "Goal complete", body: reason, meta: [`goal ran ${formatDuration(seconds * 1000)}`], level: "info" }, ctx);
 				}
 				goalStartedAt = 0;
 				goalActive = nextGoalActive(goalActive, { type: "goal_status", status: "complete" });
@@ -232,7 +249,7 @@ export default function (pi: ExtensionAPI) {
 			}
 			if (status === "blocked" || status === "paused") {
 				goalActive = nextGoalActive(goalActive, { type: "goal_status", status });
-				notify("goal", { title: `Goal ${status}`, body: reason, level: "warning" }, ctx);
+				notify(status === "blocked" ? "goal_blocked" : "goal_paused", { title: `Goal ${status}`, body: reason, level: "warning" }, ctx);
 			} else if (status !== "") {
 				goalActive = nextGoalActive(goalActive, { type: "goal_status", status });
 			}
@@ -241,7 +258,13 @@ export default function (pi: ExtensionAPI) {
 		if (event.toolName === "create_goal") {
 			goalStartedAt = Date.now();
 			goalActive = nextGoalActive(goalActive, { type: "goal_created" });
-			notify("goal", { title: "Goal started", body: "A new goal is running.", level: "info" }, ctx);
+			notify("goal_start", { title: "Goal started", body: "A new goal is running.", level: "info" }, ctx);
+			return;
+		}
+		if (event.toolName === "bg_run") {
+			const name = typeof event.input?.name === "string" ? event.input.name : "";
+			const command = typeof event.input?.command === "string" ? event.input.command : "";
+			notify("bg_start", { title: "Background task started", body: name || "A background task is running.", meta: command ? [command.slice(0, 120)] : undefined, level: "info" }, ctx);
 		}
 	});
 
@@ -447,15 +470,17 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 			if (sub === "scope") {
-				const scope = parts[1] as NotifyScope | undefined;
+				const name = (parts[1] ?? "").toLowerCase();
 				const state = (parts[2] ?? "").toLowerCase();
-				if (!scope || !SCOPES.includes(scope) || (state !== "on" && state !== "off")) {
-					ctx.ui.notify(`usage: /notify scope <${SCOPES.join("|")}> on|off`, "warning");
+				// `goal` and `bg` are group names that set every scenario in the group at once.
+				const targets = SCOPE_GROUPS[name] ?? (ALL_SCOPES.includes(name as NotifyScope) ? [name as NotifyScope] : undefined);
+				if (!targets || (state !== "on" && state !== "off")) {
+					ctx.ui.notify(`usage: /notify scope <${[...ALL_SCOPES, ...Object.keys(SCOPE_GROUPS)].join("|")}> on|off`, "warning");
 					return;
 				}
-				config.auto.scopes[scope] = state === "on";
+				for (const scope of targets) config.auto.scopes[scope] = state === "on";
 				bus.setConfig(config);
-				ctx.ui.notify(`scope ${scope} ${state}`, "info");
+				ctx.ui.notify(`scope ${name} ${state}${targets.length > 1 ? ` (${targets.join(", ")})` : ""}`, "info");
 				return;
 			}
 			if (sub === "tasknotify") {

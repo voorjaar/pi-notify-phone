@@ -34,12 +34,43 @@ export const ALL_SCOPES: NotifyScope[] = [
 	"task_complete",
 	"task_failed",
 	"question",
-	"goal",
+	"goal_start",
+	"goal_complete",
+	"goal_blocked",
+	"goal_paused",
+	"bg_start",
+	"bg_complete",
+	"bg_failed",
 	"tool_error",
 	"ui_prompt",
 	"reminder",
 	"manual",
 ];
+
+/** Defaults: a scenario that only says "something began" starts off, results start on. */
+export const DEFAULT_SCOPES: Record<NotifyScope, boolean> = {
+	task_start: false,
+	task_complete: true,
+	task_failed: true,
+	question: true,
+	goal_start: false,
+	goal_complete: true,
+	goal_blocked: true,
+	goal_paused: true,
+	bg_start: false,
+	bg_complete: true,
+	bg_failed: true,
+	tool_error: false,
+	ui_prompt: true,
+	reminder: true,
+	manual: true,
+};
+
+/** Group names that set several scopes at once, so `goal:off` keeps working after the split. */
+export const SCOPE_GROUPS: Record<string, NotifyScope[]> = {
+	goal: ["goal_start", "goal_complete", "goal_blocked", "goal_paused"],
+	bg: ["bg_start", "bg_complete", "bg_failed"],
+};
 
 /** Theme tokens the footer status may be painted with. */
 export const STATUS_COLORS: StatusColor[] = ["accent", "success", "warning", "error", "muted", "mdCode", "mdLink"];
@@ -89,17 +120,7 @@ export function defaultConfig(agentDir: string): NotifyConfig {
 		},
 		auto: {
 			enabled: true,
-			scopes: {
-				task_start: false,
-				task_complete: true,
-				task_failed: true,
-				question: true,
-				goal: true,
-				tool_error: false,
-				ui_prompt: true,
-				reminder: true,
-				manual: true,
-			},
+			scopes: { ...DEFAULT_SCOPES },
 			minRunSeconds: 0,
 			goalMinSeconds: 0,
 			suppressTaskNotify: false,
@@ -200,10 +221,18 @@ function scopesFromEnv(value: string | undefined): Partial<Record<NotifyScope, b
 	}
 	const scopes: Partial<Record<NotifyScope, boolean>> = {};
 	for (const part of text.split(/[,\s]+/).filter(Boolean)) {
-		const negated = part.startsWith("no");
-		const name = (negated ? part.slice(2) : part) as NotifyScope;
-		if (!ALL_SCOPES.includes(name)) return undefined;
-		scopes[name] = !negated;
+		// Two spellings: `noquestion` and `question:off`. `goal` and `bg` are group names.
+		const colon = part.indexOf(":");
+		const name = colon >= 0 ? part.slice(0, colon) : part;
+		const state = colon >= 0 ? part.slice(colon + 1) : "";
+		let negated = false;
+		if (state === "off" || state === "false" || state === "0") negated = true;
+		else if (state !== "on" && state !== "true" && state !== "1") negated = name.startsWith("no");
+		const key = state ? name : negated ? name.slice(2) : name;
+		if (state && state !== "on" && state !== "true" && state !== "1" && state !== "off" && state !== "false" && state !== "0") return undefined;
+		const targets = SCOPE_GROUPS[key] ?? (ALL_SCOPES.includes(key as NotifyScope) ? [key as NotifyScope] : undefined);
+		if (!targets) return undefined;
+		for (const scope of targets) scopes[scope] = !negated;
 	}
 	return Object.keys(scopes).length > 0 ? scopes : undefined;
 }
@@ -301,7 +330,7 @@ export function normalizeConfig(config: NotifyConfig): NotifyConfig {
 
 	const scopes = { ...out.auto.scopes };
 	for (const scope of ALL_SCOPES) {
-		if (typeof scopes[scope] !== "boolean") scopes[scope] = scope !== "tool_error";
+		if (typeof scopes[scope] !== "boolean") scopes[scope] = DEFAULT_SCOPES[scope];
 	}
 	out.auto.scopes = scopes;
 	return out;

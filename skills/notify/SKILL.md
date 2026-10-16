@@ -61,7 +61,7 @@ reports the provider, the switches, pending reminders, and the last send attempt
 setup problem, tell the user what to add to `~/.pi/agent/pi-notify.json` instead of retrying.
 
 Automatic notifications the user can toggle themselves: `/notify on|off`, `/notify auto on|off`,
-`/notify scope <name> on|off`, `/notify mute 30`.
+`/notify scope <name> on|off` (a single scenario, or a group: `goal`, `bg`), `/notify mute 30`.
 
 ## Mistakes to avoid
 

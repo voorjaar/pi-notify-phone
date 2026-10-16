@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+* Split the `goal` scenario into `goal_start`, `goal_complete`, `goal_blocked`, and `goal_paused`, so the
+  notification that a goal began can be switched off on its own. `goal_start` is off by default; the other
+  three are on. `goal` still works as a group name in `/notify scope goal off` and in
+  `PI_NOTIFY_AUTO_SCOPES`.
+* Added the background-task scenarios: `bg_start` (a task launched with `bg_run`, off by default),
+  `bg_complete`, and `bg_failed`. A background task settles by injecting a notification message rather than
+  an event, so its id, name, status, and error are read out of that message.
+* Fixed `PI_NOTIFY_AUTO_SCOPES` silently ignoring the documented `name:off` spelling; only bare names and
+  the `no` prefix used to parse, so `question:off,goal:off` dropped the whole override.
+
 ## 0.2.0
 
 * Added the `task_start` scenario: a notification when a run begins, carrying the prompt that started

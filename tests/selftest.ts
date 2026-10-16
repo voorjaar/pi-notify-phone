@@ -8,7 +8,7 @@ import { defaultConfig, findProblems, loadConfig, mergeConfig, normalizeConfig, 
 import { ReminderScheduler, fileStore, makeId, memoryStore } from "../src/scheduler.ts";
 import { NotifyBus, QuestionUiDedupe, composeRequest, decideRunEnd, readNotifyLog } from "../src/bus.ts";
 import { nextGoalActive } from "../src/goals.ts";
-import { messageText, reminderStatusText, taskStartBody } from "../src/announcements.ts";
+import { backgroundTaskNotice, messageText, reminderStatusText, taskStartBody } from "../src/announcements.ts";
 import { decryptBarkPayload, decryptNtfyBody, isNtfyEnvelope } from "../src/crypto.ts";
 import { buildBarkRequests, buildNtfyRequest, sendNotification } from "../src/providers.ts";
 import { formatDuration, formatRelative, parseDuration, parseWhen } from "../src/time.ts";
@@ -146,7 +146,8 @@ test("env layer overrides files", () => {
 		assert.equal(loaded.config.ntfy.topic, "env-topic");
 		assert.equal(loaded.config.enabled, false);
 		assert.equal(loaded.config.auto.scopes.question, false);
-		assert.equal(loaded.config.auto.scopes.goal, true);
+		assert.equal(loaded.config.auto.scopes.goal_complete, true, "goal is accepted as the group name");
+		assert.equal(loaded.config.auto.scopes.goal_paused, true);
 		assert.equal(loaded.config.auto.minRunSeconds, 5);
 		assert.equal(loaded.config.auto.scopes.task_complete, true);
 	} finally {
@@ -519,7 +520,7 @@ test("scheduler cancel, clear and file persistence round-trip", async () => {
 test("bus applies the master, automatic and per-scope switches", async () => {
 	const clock = new FakeClock();
 	const sent: NotifyRequest[] = [];
-	const config = baseConfig({ auto: { scopes: { goal: false } } });
+	const config = baseConfig({ auto: { scopes: { goal_complete: false } } });
 	const bus = new NotifyBus(config, {
 		transport: async (req) => {
 			sent.push(req);
@@ -528,9 +529,9 @@ test("bus applies the master, automatic and per-scope switches", async () => {
 		now: () => clock.now(),
 	});
 
-	const goal = await bus.send({ scope: "goal", body: "goal done" });
+	const goal = await bus.send({ scope: "goal_complete", body: "goal done" });
 	assert.equal(goal.ok, false);
-	assert.match(goal.detail ?? "", /scope goal is off/);
+	assert.match(goal.detail ?? "", /scope goal_complete is off/);
 
 	const manual = await bus.send({ scope: "manual", body: "hello" });
 	assert.equal(manual.ok, true);
@@ -815,6 +816,77 @@ test("the bus gates task_start like any other automatic scope", async () => {
 	const on = new NotifyBus(baseConfig({ auto: { scopes: { task_start: true } } }), { transport: fakeSend(), now: () => clock.now() });
 	const allowed = await on.send({ scope: "task_start", body: "a run started" });
 	assert.equal(allowed.ok, true);
+});
+
+test("goal and background scenarios are separate scopes, with results on and starts off", () => {
+	const scopes = baseConfig().auto.scopes;
+	assert.equal(scopes.goal_start, false, "a goal beginning is opt-in");
+	assert.equal(scopes.goal_complete, true);
+	assert.equal(scopes.goal_blocked, true);
+	assert.equal(scopes.goal_paused, true);
+	assert.equal(scopes.bg_start, false, "a launch echo is opt-in");
+	assert.equal(scopes.bg_complete, true);
+	assert.equal(scopes.bg_failed, true);
+
+	// `goal` and `bg` remain usable as group names in the env list.
+	const dir = scratchDir();
+	const noGoal = loadConfig({ cwd: dir, agentDir: dir, env: { PI_NOTIFY_AUTO_SCOPES: "nogoal" } }).config;
+	assert.equal(noGoal.auto.scopes.goal_start, false);
+	assert.equal(noGoal.auto.scopes.goal_complete, false, "the group name covers every goal scenario");
+	assert.equal(noGoal.auto.scopes.goal_paused, false);
+	assert.equal(noGoal.auto.scopes.bg_complete, true, "it does not reach the other group");
+
+	const bgOn = loadConfig({ cwd: dir, agentDir: dir, env: { PI_NOTIFY_AUTO_SCOPES: "goal bg_start" } }).config;
+	assert.equal(bgOn.auto.scopes.goal_start, true);
+	assert.equal(bgOn.auto.scopes.bg_start, true);
+	assert.equal(bgOn.auto.scopes.bg_complete, true, "bg alone does not switch off the results");
+
+	// The `name:off` spelling documented in the README works too.
+	const colon = loadConfig({ cwd: dir, agentDir: dir, env: { PI_NOTIFY_AUTO_SCOPES: "question:off,goal:off" } }).config;
+	assert.equal(colon.auto.scopes.question, false);
+	assert.equal(colon.auto.scopes.goal_complete, false);
+	assert.equal(colon.auto.scopes.task_complete, true, "scopes that were not named keep their default");
+
+	// A typo drops the whole layer instead of silently applying half of it.
+	const typo = loadConfig({ cwd: dir, agentDir: dir, env: { PI_NOTIFY_AUTO_SCOPES: "goalcompete" } }).config;
+	assert.equal(typo.auto.scopes.goal_complete, true, "an unknown scope name leaves the defaults alone");
+	rmSync(dir, { recursive: true, force: true });
+});
+
+test("the bus gates the new scopes like any other automatic scenario", async () => {
+	const clock = new FakeClock();
+	const off = new NotifyBus(baseConfig(), { transport: fakeSend(), now: () => clock.now() });
+	const blockedStart = await off.send({ scope: "bg_start", body: "a task launched" });
+	assert.equal(blockedStart.ok, false);
+	assert.match(blockedStart.detail ?? "", /scope bg_start is off/);
+
+	const on = new NotifyBus(baseConfig({ auto: { scopes: { bg_start: true } } }), { transport: fakeSend(), now: () => clock.now() });
+	const allowed = await on.send({ scope: "bg_start", body: "a task launched" });
+	assert.equal(allowed.ok, true);
+});
+
+test("a background task notification is read out of the injected message", () => {
+	const completed = backgroundTaskNotice(
+		["<background-task-notification>", " <task-id>bb80a9296</task-id>", " <task-name>live lifecycle check</task-name>", " <status>failed</status>", " <error>Exited with code 1</error>", " <summary>Background task failed</summary>", "</background-task-notification>"].join("\n"),
+	);
+	assert.ok(completed);
+	assert.equal(completed.taskId, "bb80a9296");
+	assert.equal(completed.name, "live lifecycle check");
+	assert.equal(completed.status, "failed");
+	assert.equal(completed.error, "Exited with code 1");
+
+	const done = backgroundTaskNotice("<background-task-notification><task-id>x1</task-id><status>completed</status></background-task-notification>");
+	assert.ok(done);
+	assert.equal(done.status, "completed");
+	assert.equal(done.error, undefined, "a clean finish reports no error");
+
+	assert.equal(backgroundTaskNotice("what is 2 plus 2?"), undefined, "ordinary text is not a task block");
+	assert.equal(backgroundTaskNotice("<background-task-notification>no fields here</background-task-notification>"), undefined);
+	assert.equal(
+		taskStartBody("<background-task-notification><status>completed</status></background-task-notification>"),
+		"A background task result started the run.",
+		"the raw block does not end up as a notification body",
+	);
 });
 
 test("the footer status is a clock and a count, or nothing", () => {

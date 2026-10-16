@@ -14,7 +14,8 @@ Pi 跑完一个长任务  ->  pi-notify-phone  ->  https://api.day.app/...  ->  
 - **两种通道**：Bark（iOS）与 ntfy（iOS、Android、桌面、网页）。在配置里选，或用 `/notify provider bark|ntfy` 切换。
 - **可选加密**：Bark 的 AES-128-CBC / AES-256-GCM 请求体加密（官方 `crypto.ts` 方案），以及自建 ntfy 的 AES-256-GCM 信封，助手可以把它解回明文。
 - **自动或手动**：一个总开关、一个自动开关、每个场景各自一个开关。只要 `manual` 场景开着，你随时可以让助手主动发。
-- **通知场景**：任务完成 / 失败 / 中止、`ask_user_question` 在等你回答、goal 开始 / 完成 / 阻塞 / 暂停、阻塞式输入对话框、工具报错、提醒。
+- **通知场景**：任务开始 / 完成 / 失败 / 中止、`ask_user_question` 在等你回答、goal 开始 / 完成 / 阻塞 / 暂停、
+  后台任务开始 / 完成 / 失败、阻塞式输入对话框、工具报错、提醒。每个场景各自一个开关，默认值见下表。
 - **提醒与定时通知**：相对时间（`in 20m`）、绝对时间（`at 08:30`、`tomorrow 09:00`）、周期重复（`every 1d`），落盘保存，重启后仍会送达。
 - **降噪**：最短运行时长、每个场景的节流、重复抑制、正文长度上限、TTL 过期丢弃，以及 goal 运行期间抑制任务通知的开关。
 
@@ -116,24 +117,33 @@ node scripts/send.ts "pi-notify-phone" "hello" info
 | `logEnabled` | `true` | 关掉发送历史。 |
 | `schedules` | `[]` | 预置的定时通知，例如每天一次的站会提醒。 |
 
-场景开关（`auto.scopes`），除 `tool_error` 和 `task_start` 外默认都是 `true`：
+场景开关（`auto.scopes`）：每个场景一个开关。只告诉你“某件事开始了”的场景默认关闭，凡是报告“结果”的场景默认开启。
 
-| 场景 | 触发时机 |
-| --- | --- |
-| `task_start` | 一次运行开始（取本次运行的第一条消息）。**默认关闭。** |
-| `task_complete` | 一次运行结束，且时长不少于 `minRunSeconds` |
-| `task_failed` | 一次运行以 API/模型错误结束 |
-| `question` | `ask_user_question` 正在等你回答 |
-| `goal` | goal 开始 / 完成 / 阻塞 / 暂停 |
-| `tool_error` | 某次工具调用返回错误 |
-| `ui_prompt` | 某个扩展打开了阻塞式输入框 |
-| `reminder` | 定时提醒到点 |
-| `manual` | 你或助手明确要求的一次发送 |
+| 场景 | 默认 | 触发时机 |
+| --- | --- | --- |
+| `task_start` | **关** | 一次运行开始（取本次运行的第一条消息） |
+| `task_complete` | 开 | 一次运行结束，且时长不少于 `auto.minRunSeconds` |
+| `task_failed` | 开 | 一次运行以 API/模型错误结束 |
+| `question` | 开 | `ask_user_question` 正在等你回答 |
+| `goal_start` | **关** | goal 开始（`create_goal` 调用，或 goal 继续运行的那一轮） |
+| `goal_complete` | 开 | goal 完成，且时长不少于 `auto.goalMinSeconds` |
+| `goal_blocked` | 开 | goal 被置为阻塞 |
+| `goal_paused` | 开 | goal 被置为暂停 |
+| `bg_start` | **关** | 后台任务启动（`bg_run`） |
+| `bg_complete` | 开 | 后台任务完成 |
+| `bg_failed` | 开 | 后台任务失败、被杀掉或超时 |
+| `tool_error` | **关** | 某次工具调用返回错误 |
+| `ui_prompt` | 开 | 某个扩展打开了阻塞式输入框 |
+| `reminder` | 开 | 定时提醒到点 |
+| `manual` | 开 | 你或助手明确要求的一次发送 |
+
+`goal` 和 `bg` 是组名，一次覆盖整族场景：`PI_NOTIFY_AUTO_SCOPES=goal:off` 或 `/notify scope goal off` 会把四个 goal 场景一起关掉。
+在 `PI_NOTIFY_AUTO_SCOPES` 里，`noquestion` 和 `question:off` 两种写法都接受；出现不认识的名字时，整条覆盖会被丢弃，而不是只生效一半。
 
 一次阻塞的 `ask_user_question` 会同时触发 `question` 和 `ui_prompt_start`。`question` 通知已经覆盖了这个提问，所以不会再推一条 `ui_prompt`。
 
 环境变量覆盖（优先级高于配置文件）：`PI_NOTIFY_PROVIDER`、`PI_NOTIFY_ENABLED`、
-`PI_NOTIFY_TITLE`、`PI_NOTIFY_STATUS_COLOR`、`PI_NOTIFY_AUTO_ENABLED`、`PI_NOTIFY_AUTO_SCOPES=question:on,goal:off`、
+`PI_NOTIFY_TITLE`、`PI_NOTIFY_STATUS_COLOR`、`PI_NOTIFY_AUTO_ENABLED`、`PI_NOTIFY_AUTO_SCOPES=question:off,goal:off`、
 `PI_NOTIFY_MIN_RUN_SECONDS`、`PI_NOTIFY_GOAL_MIN_SECONDS`、`PI_NOTIFY_SUPPRESS_TASK_NOTIFY`、`PI_NOTIFY_THROTTLE_SECONDS`、`PI_NOTIFY_BARK_KEY`
 （逗号分隔可写多台设备）、`PI_NOTIFY_BARK_BASE_URL`、`PI_NOTIFY_BARK_GROUP`、
 `PI_NOTIFY_BARK_SOUND`、`PI_NOTIFY_BARK_ICON`、`PI_NOTIFY_BARK_ENCRYPT`、
@@ -159,7 +169,7 @@ node scripts/send.ts "pi-notify-phone" "hello" info
 /notify                        查看状态
 /notify on | off               总开关（本次会话）
 /notify auto on | off          自动场景通知
-/notify scope <name> on|off    单个场景开关
+/notify scope <name> on|off    单个场景开关，或整组（`goal`、`bg`）
 /notify tasknotify on|off        goal 运行期间是否抑制任务通知（完成/失败/中止）
 /notify provider bark|ntfy     切换通道（本次会话）
 /notify test                   发一条通知验证送达
